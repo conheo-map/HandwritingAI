@@ -193,7 +193,7 @@ with tab2:
 
         canvas_word = st_canvas(
             fill_color="rgba(255, 255, 255, 0)",
-            stroke_width=stroke_w,
+            stroke_width=stroke_width,
             stroke_color=stroke_color,
             background_color=bg_color,
             height=180,
@@ -214,8 +214,8 @@ with tab2:
             if segmented_items:
                 word_res = engine.predict_word(
                     segmented_items, 
-                    temperature=temperature, 
-                    filter_mode=filter_mode
+                    temperature=temperature_val, 
+                    filter_mode=selected_filter
                 )
 
                 avg_conf = (
@@ -274,8 +274,8 @@ with tab2:
                     if segmented_items:
                         word_res = engine.predict_word(
                             segmented_items, 
-                            temperature=temperature, 
-                            filter_mode=filter_mode
+                            temperature=temperature_val, 
+                            filter_mode=selected_filter
                         )
 
                         avg_conf = (
