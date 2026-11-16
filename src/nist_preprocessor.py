@@ -14,6 +14,7 @@ import cv2
 import numpy as np
 from scipy import ndimage
 from PIL import Image
+from typing import Dict, Any, Tuple
 
 
 class NISTPreprocessor:
@@ -24,18 +25,20 @@ class NISTPreprocessor:
         self.inner_box_size = inner_box_size
 
     def preprocess_canvas_image(self, canvas_array: np.ndarray) -> np.ndarray:
+        """Xử lý nhanh ảnh vẽ tay sang ma trận 28x28 chuẩn hóa [0.0, 1.0]."""
+        res = self.preprocess_with_steps(canvas_array)
+        return res["normalized"]
+
+    def preprocess_with_steps(self, canvas_array: np.ndarray) -> Dict[str, Any]:
         """
-        Xử lý ảnh vẽ tay từ Canvas (RGBA hoặc RGB) sang ma trận xám chuẩn EMNIST 28x28.
-        Nền đen (0), chữ trắng (255), giá trị chuẩn hóa [0.0, 1.0].
+        Bóc tách chi tiết từng bước thuật toán tiền xử lý phục vụ trực quan hóa và thuyết trình.
         """
         # 1. Chuyển đổi sang ảnh xám Grayscale
         if len(canvas_array.shape) == 3:
             if canvas_array.shape[2] == 4:
-                # Nếu là RGBA: Kiểm tra kênh Alpha
                 alpha = canvas_array[:, :, 3]
                 rgb = canvas_array[:, :, :3]
                 gray = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)
-                # Nếu nền trong suốt có nét vẽ
                 if np.max(alpha) > 0 and np.mean(gray) > 200:
                     gray = 255 - gray
             else:
@@ -43,21 +46,31 @@ class NISTPreprocessor:
         else:
             gray = canvas_array.copy()
 
-        # 2. Đảm bảo nền đen chữ trắng (Invert nếu nền sáng chữ tối)
+        # 2. Đảm bảo nền đen chữ trắng
         if np.mean(gray) > 127:
             gray = 255 - gray
 
         # 3. Lọc nhiễu nhẹ bằng Gaussian Blur
-        gray = cv2.GaussianBlur(gray, (3, 3), 0)
+        gray_clean = cv2.GaussianBlur(gray, (3, 3), 0)
 
         # 4. Cắt vùng nét chữ (Bounding Box)
-        coords = cv2.findNonZero(gray)
+        coords = cv2.findNonZero(gray_clean)
         if coords is None:
-            # Khung hình rỗng (không có nét vẽ)
-            return np.zeros(self.target_size, dtype=np.float32)
+            empty = np.zeros(self.target_size, dtype=np.float32)
+            return {
+                "step1_gray": gray_clean,
+                "step2_crop": np.zeros((20, 20), dtype=np.uint8),
+                "step3_resized": np.zeros((20, 20), dtype=np.uint8),
+                "step4_padded": np.zeros((28, 28), dtype=np.uint8),
+                "step5_centered": np.zeros((28, 28), dtype=np.uint8),
+                "centroid": (14.0, 14.0),
+                "shift": (0, 0),
+                "bbox": (0, 0, 0, 0),
+                "normalized": empty
+            }
 
         x, y, w, h = cv2.boundingRect(coords)
-        char_crop = gray[y:y+h, x:x+w]
+        char_crop = gray_clean[y:y+h, x:x+w]
 
         # 5. Co giãn vào khung 20x20 giữ nguyên tỷ lệ cạnh
         if w > h:
@@ -69,7 +82,7 @@ class NISTPreprocessor:
 
         resized_char = cv2.resize(char_crop, (new_w, new_h), interpolation=cv2.INTER_AREA)
 
-        # 6. Đặt vào giữa khung 28x28
+        # 6. Đệm viền đối xứng vào khung 28x28
         pad_top = (self.target_size[0] - new_h) // 2
         pad_bottom = self.target_size[0] - new_h - pad_top
         pad_left = (self.target_size[1] - new_w) // 2
@@ -81,24 +94,37 @@ class NISTPreprocessor:
             cv2.BORDER_CONSTANT, value=0
         )
 
-        # 7. Tính Trọng tâm (Center of Mass) và dịch chuyển về tâm (14, 14)
+        # 7. Tính Trọng tâm điểm ảnh (Center of Mass) theo công thức mô-men
         cy, cx = ndimage.center_of_mass(padded)
         if not np.isnan(cx) and not np.isnan(cy):
             shift_x = int(round(14.0 - cx))
             shift_y = int(round(14.0 - cy))
 
-            # Giới hạn khoảng dịch chuyển tránh trôi nét ra ngoài khung
+            # Giới hạn dịch chuyển tránh mất nét
             shift_x = max(-4, min(4, shift_x))
             shift_y = max(-4, min(4, shift_y))
 
             translation_matrix = np.float32([[1, 0, shift_x], [0, 1, shift_y]])
             centered = cv2.warpAffine(padded, translation_matrix, self.target_size)
         else:
+            shift_x, shift_y = 0, 0
+            cx, cy = 14.0, 14.0
             centered = padded
 
-        # 8. Chuẩn hóa về dải [0.0, 1.0]
+        # 8. Chuẩn hóa về [0.0, 1.0]
         normalized = centered.astype(np.float32) / 255.0
-        return normalized
+
+        return {
+            "step1_gray": gray_clean,
+            "step2_crop": char_crop,
+            "step3_resized": resized_char,
+            "step4_padded": padded,
+            "step5_centered": centered,
+            "centroid": (float(cx), float(cy)),
+            "shift": (shift_x, shift_y),
+            "bbox": (x, y, w, h),
+            "normalized": normalized
+        }
 
     def to_model_input(self, normalized_array: np.ndarray) -> np.ndarray:
         """Định hình ma trận ảnh về dạng NCHW (1, 1, 28, 28) sẵn sàng cho PyTorch / ONNX."""
