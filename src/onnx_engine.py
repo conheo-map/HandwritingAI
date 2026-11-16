@@ -69,7 +69,9 @@ class InferenceEngine:
                 sd = torch.load(str(target_path), map_location=self.device)
                 num_classes = 62
                 if isinstance(sd, dict):
-                    if "classes" in sd:
+                    if "num_classes" in sd:
+                        num_classes = sd["num_classes"]
+                    elif "classes" in sd:
                         num_classes = sd["classes"]
                     if "model_state_dict" in sd:
                         sd = sd["model_state_dict"]
