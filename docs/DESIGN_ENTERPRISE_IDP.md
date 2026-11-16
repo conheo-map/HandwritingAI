@@ -3,7 +3,6 @@
 > **Dự án:** DocuMind Studio (HandwritingAI Enterprise Edition)  
 > **Kiến trúc:** Dual-Engine Enterprise Intelligent Document Processing (IDP)  
 > **Mục tiêu chuyên sâu:** Văn Bản Hợp Đồng & Giấy Tờ Tùy Thân (CCCD Gắn Chip / Hộ Chiếu)  
-> **Tác giả:** Trương Duy Cường (2026)  
 
 ---
 

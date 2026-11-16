@@ -1,6 +1,5 @@
 """
 modern_resnet.py — Kiến trúc Mạng Nơ-ron Tích chập Sâu Deep ResNet cho Ký Tự Viết Tay EMNIST
-Tác giả: Truong Duy Cuong
 
 Đặc trưng kiến trúc:
   - Khối Residual Block với kết nối tắt (Skip Connections)

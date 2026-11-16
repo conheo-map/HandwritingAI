@@ -1,6 +1,5 @@
 """
 test_idp_preprocessor.py — Unit Tests for Document Geometric & Vision Preprocessor
-Tác giả: Truong Duy Cuong
 """
 
 import sys

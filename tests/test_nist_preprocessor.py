@@ -1,6 +1,5 @@
 """
 test_nist_preprocessor.py — Unit Tests for NIST Center-of-Mass Preprocessor
-Tác giả: Truong Duy Cuong
 """
 
 import sys

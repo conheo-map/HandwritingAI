@@ -1,7 +1,7 @@
-# 🎓 CẨM NANG THUYẾT TRÌNH & BẢO VỆ ĐỒ ÁN HỌC MÁY (CHƯƠNG 6)
-> **Đề tài:** Hệ Thống Nhận Diện Ký Tự & Văn Bản Viết Tay Thời Gian Thực (HandwritingAI Studio)  
+# CẨM NANG THUYẾT TRÌNH & BẢO VỆ ĐỒ ÁN HỌC MÁY (CHƯƠNG 6)
+> **Đề tài:** Hệ Thống Nhận Diện Ký Tự & Văn Bản Viết Tay Thời Gian Thực (HandwritingAI)  
 > **Môn học:** Trí Tuệ Nhân Tạo — Chương 6: Học Máy (Machine Learning)  
-> **Tác giả / Nhóm thực hiện:** Trương Duy Cường & Nhóm Sinh Viên  
+> **Nhóm thực hiện:** Nhóm Sinh Viên  
 
 ---
 

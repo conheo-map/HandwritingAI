@@ -1,10 +1,9 @@
-# ✍️ HandwritingAI Studio: Real-Time SOTA Handwritten Character & Word Recognition
+# HandwritingAI: Real-Time Handwritten Character & Word Recognition
 
-> **Tác giả:** Trương Duy Cường  
-> **Phiên bản:** v1.0.0 Production  
-> **Tiêu chuẩn:** NIST Center-of-Mass Moments Normalization  
-> **Kiến trúc:** Deep ResNet + Squeeze-and-Excitation (SE Attention)  
-> **Độ trễ suy luận:** `< 1.5 ms / ký tự` (ONNX Runtime / GPU CUDA)
+> **Kiến trúc:** Deep ResNet-18 + Squeeze-and-Excitation (SE Attention)  
+> **Tiêu chuẩn tiền xử lý:** NIST Center-of-Mass Moments Normalization  
+> **Tập dữ liệu:** EMNIST Balanced (47 classes)  
+> **Độ trễ suy luận:** `< 1.5 ms / ký tự` (CUDA / GPU)
 
 ---
 
@@ -65,7 +64,6 @@ HandwritingAI/
 │   └── onnx_engine.py            # Động cơ suy luận siêu tốc đa nền tảng
 ├── app.py                        # Giao diện Web Application hoàn chỉnh
 ├── requirements.txt              # Danh sách thư viện phụ thuộc
-├── LICENSE                       # Bản quyền phần mềm MIT
 └── README.md                     # Tài liệu hướng dẫn sử dụng
 ```
 
@@ -95,9 +93,3 @@ streamlit run app.py
 | **Xử lý cặp chữ hoa/thường** | F1-Score nhiều chữ thường $= 0$ | **Hierarchical Mapping & Data Augmentation** |
 | **Độ trễ suy luận (Latency)** | $\sim 25 - 40\text{ ms}$ (Keras CPU) | **$< 1.5\text{ ms}$ / ký tự (ONNX / GPU)** |
 | **Khả năng OCR đa ký tự** | Không hỗ trợ (Chỉ vẽ 1 chữ) | **Hỗ trợ bóc tách & nhận diện cả Từ / Dòng chữ** |
-| **Bản quyền & Mã nguồn** | File `.ipynb` chứa metadata người khác | **100% Mã nguồn sạch, sở hữu độc quyền** |
-
----
-
-## 📜 6. Bản Quyền & Giấy Phép
-Dự án được phát hành theo giấy phép **MIT License**. Bản quyền thuộc về **Trương Duy Cường (2026)**.

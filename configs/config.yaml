@@ -2,7 +2,6 @@ project:
   name: "HandwritingAI"
   description: "Hệ Thống Nhận Diện Ký Tự & Văn Bản Viết Tay Thời Gian Thực Chuẩn SOTA"
   version: "1.0.0"
-  author: "Truong Duy Cuong"
 
 dataset:
   name: "EMNIST"

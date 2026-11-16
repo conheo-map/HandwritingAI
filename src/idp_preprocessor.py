@@ -1,7 +1,5 @@
 """
-idp_preprocessor.py — Module Tiền Xử Lý Hình Học & Khử Lóa Thẻ Doanh Nghiệp (Enterprise Vision Preprocessor)
-Tác giả: Truong Duy Cuong
-Dự án: Enterprise IDP & Document AI (HandwritingAI Studio)
+idp_preprocessor.py — Module Tiền Xử Lý Hình Học & Khử Lóa (Vision Preprocessor)
 """
 
 import cv2
