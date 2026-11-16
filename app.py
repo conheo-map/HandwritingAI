@@ -176,40 +176,143 @@ with tab1:
             st.info("Chờ nét vẽ để thực hiện suy luận...")
 
 # ══════════════════════════════════════════════════════════════════════════
-# TAB 2: NHẬN DIỆN TỪ / DÒNG CHỮ VIẾT TAY (WORD OCR)
+# TAB 2: NHẬN DIỆN CHUỖI KÝ TỰ & TỪ VIẾT TAY (WORD OCR)
 # ══════════════════════════════════════════════════════════════════════════
 with tab2:
-    st.subheader("Nhận diện chuỗi ký tự từ ảnh")
-    st.markdown("Tách ký tự (Segmentation) theo trục tọa độ không gian từ trái sang phải.")
+    st.subheader("Nhận diện chuỗi ký tự viết tay")
+    st.markdown("Hỗ trợ vẽ trực tiếp cả chuỗi ký tự lên bảng vẽ hoặc tải ảnh tài liệu lên để phân đoạn và nhận diện.")
 
-    col_up, col_ocr_res = st.columns([1, 1], gap="large")
+    input_mode = st.radio(
+        "Chọn phương thức nhập liệu:",
+        ["Vẽ chuỗi ký tự trực tiếp", "Tải ảnh từ tệp"],
+        horizontal=True
+    )
 
-    with col_up:
-        up_doc = st.file_uploader("Tải ảnh chứa chữ viết tay (JPG, PNG):", type=["jpg", "jpeg", "png"], key="word_uploader")
-        if up_doc:
-            doc_img = Image.open(up_doc)
-            st.image(doc_img, caption="Ảnh gốc")
+    if input_mode == "Vẽ chuỗi ký tự trực tiếp":
+        st.caption("Vẽ các ký tự lần lượt từ trái sang phải. Giữ khoảng cách nhỏ giữa các ký tự để thuật toán phân đoạn chính xác.")
 
-    with col_ocr_res:
-        if up_doc:
-            with st.spinner("Đang xử lý phân đoạn và nhận diện..."):
-                segmented = segmenter.segment_image(doc_img)
-                if segmented:
-                    word_res = engine.predict_word(segmented)
+        canvas_word = st_canvas(
+            fill_color="rgba(255, 255, 255, 0)",
+            stroke_width=stroke_w,
+            stroke_color=stroke_color,
+            background_color=bg_color,
+            height=180,
+            width=700,
+            drawing_mode="freedraw",
+            key="word_canvas",
+        )
 
-                    st.success(f"Kết quả nhận diện: `{word_res['predicted_text']}`")
-                    st.metric("Tổng số ký tự", word_res["num_characters"])
-                    st.metric("Tổng thời gian", f"{word_res['total_latency_ms']:.2f} ms")
+        has_strokes = (
+            canvas_word.image_data is not None
+            and np.any(canvas_word.image_data[:, :, :3] > 30)
+        )
 
-                    st.markdown("##### Chi tiết từng ký tự:")
-                    cols_char = st.columns(min(len(segmented), 6))
-                    for i, item in enumerate(segmented[:6]):
+        if has_strokes:
+            with st.spinner("Đang phân đoạn và nhận diện chuỗi ký tự..."):
+                segmented_items, annotated = segmenter.segment_image(canvas_word.image_data)
+
+            if segmented_items:
+                word_res = engine.predict_word(
+                    segmented_items, 
+                    temperature=temperature, 
+                    filter_mode=filter_mode
+                )
+
+                avg_conf = (
+                    sum(item["confidence"] for item in word_res["characters"]) / len(word_res["characters"])
+                    if word_res["characters"] else 0.0
+                )
+
+                st.markdown(
+                    f"""
+                    <div style="background-color: #1E1E2E; padding: 18px; border-radius: 8px; border: 1px solid #4B5563; margin-top: 15px; margin-bottom: 20px;">
+                        <span style="font-size: 14px; color: #9CA3AF; text-transform: uppercase; letter-spacing: 1px;">Kết Quả Nhận Diện:</span>
+                        <div style="font-size: 54px; font-weight: bold; color: #FFFFFF; font-family: monospace; letter-spacing: 6px;">
+                            {word_res['predicted_text']}
+                        </div>
+                        <span style="color: #9CA3AF; font-size: 14px;">
+                            Số ký tự: <b>{word_res['num_characters']}</b> | 
+                            Độ tin cậy TB: <b>{avg_conf * 100:.2f}%</b> | 
+                            Tổng thời gian: <b>{word_res['total_latency_ms']:.2f} ms</b>
+                        </span>
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
+
+                c_vis, c_details = st.columns([1, 1], gap="medium")
+                with c_vis:
+                    st.markdown("##### Kết quả phân đoạn không gian (Bounding Boxes):")
+                    st.image(annotated, channels="BGR", caption="Các ký tự được tách độc lập theo thứ tự từ trái sang phải")
+
+                with c_details:
+                    st.markdown("##### Chi tiết từng ký tự sau chuẩn hóa:")
+                    cols_char = st.columns(min(len(segmented_items), 8))
+                    for i, item in enumerate(segmented_items[:8]):
                         with cols_char[i]:
-                            st.image(item["char_crop"], caption=f"#{i+1}: '{word_res['characters'][i]['char']}'", width=60)
-                else:
-                    st.warning("Không tìm thấy nét chữ rõ ràng trong ảnh.")
+                            char_info = word_res["characters"][i]
+                            st.image(item["normalized_28x28"], caption=f"#{i+1}: '{char_info['char']}'\n({char_info['confidence']*100:.1f}%)", width=55)
+            else:
+                st.warning("Chưa tách được ký tự. Vui lòng viết nét liền và để khoảng cách nhỏ giữa các ký tự.")
         else:
-            st.info("Tải lên ảnh chứa chữ viết tay ở cột bên trái.")
+            st.info("Hãy vẽ một chuỗi chữ số hoặc chữ cái lên bảng vẽ ở trên để nhận diện.")
+
+    else:
+        col_up, col_ocr_res = st.columns([1, 1], gap="large")
+
+        with col_up:
+            up_doc = st.file_uploader("Tải ảnh chứa chữ viết tay (JPG, PNG):", type=["jpg", "jpeg", "png"], key="word_uploader")
+            if up_doc:
+                doc_img = Image.open(up_doc)
+                st.image(doc_img, caption="Ảnh gốc tải lên")
+
+        with col_ocr_res:
+            if up_doc:
+                with st.spinner("Đang xử lý phân đoạn và nhận diện..."):
+                    segmented_items, annotated = segmenter.segment_image(doc_img)
+
+                    if segmented_items:
+                        word_res = engine.predict_word(
+                            segmented_items, 
+                            temperature=temperature, 
+                            filter_mode=filter_mode
+                        )
+
+                        avg_conf = (
+                            sum(item["confidence"] for item in word_res["characters"]) / len(word_res["characters"])
+                            if word_res["characters"] else 0.0
+                        )
+
+                        st.markdown(
+                            f"""
+                            <div style="background-color: #1E1E2E; padding: 18px; border-radius: 8px; border: 1px solid #4B5563; margin-bottom: 20px;">
+                                <span style="font-size: 14px; color: #9CA3AF; text-transform: uppercase; letter-spacing: 1px;">Kết Quả Nhận Diện:</span>
+                                <div style="font-size: 48px; font-weight: bold; color: #FFFFFF; font-family: monospace; letter-spacing: 4px;">
+                                    {word_res['predicted_text']}
+                                </div>
+                                <span style="color: #9CA3AF; font-size: 14px;">
+                                    Số ký tự: <b>{word_res['num_characters']}</b> | 
+                                    Độ tin cậy TB: <b>{avg_conf * 100:.2f}%</b> | 
+                                    Tổng thời gian: <b>{word_res['total_latency_ms']:.2f} ms</b>
+                                </span>
+                            </div>
+                            """,
+                            unsafe_allow_html=True
+                        )
+
+                        st.markdown("##### Kết quả phân đoạn ảnh:")
+                        st.image(annotated, channels="BGR", caption="Khung nhận diện bounding box")
+
+                        st.markdown("##### Chi tiết từng ký tự:")
+                        cols_char = st.columns(min(len(segmented_items), 8))
+                        for i, item in enumerate(segmented_items[:8]):
+                            with cols_char[i]:
+                                char_info = word_res["characters"][i]
+                                st.image(item["normalized_28x28"], caption=f"#{i+1}: '{char_info['char']}'\n({char_info['confidence']*100:.1f}%)", width=55)
+                    else:
+                        st.warning("Không tìm thấy nét chữ rõ ràng trong ảnh.")
+            else:
+                st.info("Tải lên ảnh chứa chữ viết tay ở cột bên trái.")
 
 # ══════════════════════════════════════════════════════════════════════════
 # TAB 3: BÓC TÁCH THUẬT TOÁN TRỰC QUAN (ALGORITHM VISUALIZER)

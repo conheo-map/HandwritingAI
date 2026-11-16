@@ -212,14 +212,24 @@ class InferenceEngine:
             "all_probs": probs
         }
 
-    def predict_word(self, segmented_chars: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def predict_word(
+        self, 
+        segmented_chars: List[Dict[str, Any]], 
+        temperature: float = 0.5, 
+        filter_mode: str = "all"
+    ) -> Dict[str, Any]:
         """Suy luận cả chuỗi ký tự từ danh sách các ký tự đã bóc tách."""
         word_result = ""
         total_time = 0.0
         char_details = []
 
         for item in segmented_chars:
-            res = self.predict_single(item["tensor_input"], top_k=3)
+            res = self.predict_single(
+                item["tensor_input"], 
+                top_k=3, 
+                temperature=temperature, 
+                filter_mode=filter_mode
+            )
             word_result += res["best_character"]
             total_time += res["latency_ms"]
             char_details.append({
