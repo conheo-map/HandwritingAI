@@ -96,12 +96,14 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-active_mode = st.radio(
+active_mode = st.segmented_control(
     "Điều hướng chế độ:",
-    ["Bảng vẽ tương tác", "Nhận diện từ ngữ", "Phân tích thuật toán"],
-    horizontal=True,
+    options=["Bảng vẽ tương tác", "Nhận diện từ ngữ", "Phân tích thuật toán"],
+    default="Bảng vẽ tương tác",
     label_visibility="collapsed"
 )
+if active_mode is None:
+    active_mode = "Bảng vẽ tương tác"
 
 # ══════════════════════════════════════════════════════════════════════════
 # CHẾ ĐỘ 1: BẢNG VẼ TƯƠNG TÁC TRỰC TIẾP
@@ -198,11 +200,13 @@ elif active_mode == "Nhận diện từ ngữ":
     st.subheader("Nhận diện chuỗi ký tự viết tay")
     st.markdown("Hỗ trợ vẽ trực tiếp cả chuỗi ký tự lên bảng vẽ hoặc tải ảnh tài liệu lên để phân đoạn và nhận diện.")
 
-    input_mode = st.radio(
+    input_mode = st.segmented_control(
         "Chọn phương thức nhập liệu:",
-        ["Vẽ chuỗi ký tự trực tiếp", "Tải ảnh từ tệp"],
-        horizontal=True
+        options=["Vẽ chuỗi ký tự trực tiếp", "Tải ảnh từ tệp"],
+        default="Vẽ chuỗi ký tự trực tiếp"
     )
+    if input_mode is None:
+        input_mode = "Vẽ chuỗi ký tự trực tiếp"
 
     if input_mode == "Vẽ chuỗi ký tự trực tiếp":
         st.caption("Vẽ các ký tự lần lượt từ trái sang phải. Giữ khoảng cách nhỏ giữa các ký tự để thuật toán phân đoạn chính xác.")
