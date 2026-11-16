@@ -1,96 +1,116 @@
 """
 onnx_engine.py — Động cơ Suy Luận Siêu Tốc (High-Speed Inference Engine)
 Tác giả: Truong Duy Cuong
-
-Hỗ trợ suy luận đa nền tảng:
-  - PyTorch CUDA (AMP fp16)
-  - ONNX Runtime với độ trễ < 1.5ms trên cả CPU và GPU
 """
 
 import string
 import time
 import numpy as np
 import torch
+import torch.nn as nn
 from pathlib import Path
-from typing import List, Dict, Any, Tuple
+from typing import List, Dict, Any
 
-# Bản đồ 62 ký tự EMNIST ByClass:
-# 0-9: '0'-'9' (index 0 - 9)
-# 10-35: 'A'-'Z' (index 10 - 35)
-# 36-61: 'a'-'z' (index 36 - 61)
+# Bản đồ 62 ký tự EMNIST ByClass chuẩn
 EMNIST_BYCLASS_CHARS = list(string.digits + string.ascii_uppercase + string.ascii_lowercase)
 
-# Bản đồ 47 ký tự EMNIST ByMerge
-MERGE_MAP = {
-    'c': 'C', 'i': 'I', 'j': 'J', 'k': 'K', 'l': 'L',
-    'm': 'M', 'o': 'O', 'p': 'P', 's': 'S', 'u': 'U',
-    'v': 'V', 'w': 'W', 'x': 'X', 'y': 'Y', 'z': 'Z'
-}
+
+class SimpleEMNISTCNN(nn.Module):
+    """Mạng CNN tối ưu hóa cho EMNIST ByClass 62 lớp."""
+    def __init__(self, num_classes=62):
+        super().__init__()
+        self.conv1 = nn.Conv2d(1, 32, kernel_size=3, padding=0)
+        self.conv2 = nn.Conv2d(32, 64, kernel_size=3, padding=0)
+        self.dropout1 = nn.Dropout(0.25)
+        self.dropout2 = nn.Dropout(0.5)
+        self.fc1 = nn.Linear(9216, 128)
+        self.fc2 = nn.Linear(128, num_classes)
+
+    def forward(self, x):
+        x = nn.functional.relu(self.conv1(x))
+        x = nn.functional.relu(self.conv2(x))
+        x = nn.functional.max_pool2d(x, 2)
+        x = self.dropout1(x)
+        x = torch.flatten(x, 1)
+        x = nn.functional.relu(self.fc1(x))
+        x = self.dropout2(x)
+        x = self.fc2(x)
+        return x
 
 
 class InferenceEngine:
     """Bộ máy suy luận tốc độ cao cho mô hình nhận diện chữ viết tay."""
 
     def __init__(self, model_path: str = None, use_onnx: bool = False):
-        self.use_onnx = use_onnx
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.session = None
         self.torch_model = None
         self.class_names = EMNIST_BYCLASS_CHARS
 
+        # Tự động tìm trọng số khả dụng trong models/
+        base_dir = Path(__file__).resolve().parent.parent
+        models_dir = base_dir / "models"
+        
+        target_path = None
         if model_path and Path(model_path).exists():
-            if str(model_path).endswith(".onnx"):
-                try:
-                    import onnxruntime as ort
-                    providers = ['CUDAExecutionProvider', 'CPUExecutionProvider'] if torch.cuda.is_available() else ['CPUExecutionProvider']
-                    self.session = ort.InferenceSession(model_path, providers=providers)
-                    self.use_onnx = True
-                    print(f"[✓] Đã nạp ONNX Runtime Model: {model_path} trên {providers[0]}")
-                except Exception as e:
-                    print(f"[!] Không thể khởi động ONNX Runtime: {e}")
-            else:
-                try:
-                    from modern_resnet import create_model
-                except ImportError:
-                    from src.modern_resnet import create_model
+            target_path = Path(model_path)
+        else:
+            candidates = [
+                models_dir / "best_emnist_cnn.pt",
+                models_dir / "best_emnist_resnet.pt"
+            ]
+            for c in candidates:
+                if c.exists():
+                    target_path = c
+                    break
 
-                self.torch_model = create_model(num_classes=len(self.class_names))
-                checkpoint = torch.load(model_path, map_location=self.device)
-                if "model_state_dict" in checkpoint:
-                    self.torch_model.load_state_dict(checkpoint["model_state_dict"])
-                else:
-                    self.torch_model.load_state_dict(checkpoint)
-                self.torch_model.to(self.device).eval()
-                print(f"[✓] Đã nạp PyTorch Model: {model_path} trên {self.device}")
+        if target_path and target_path.exists():
+            try:
+                # Thử nạp SimpleEMNISTCNN trước
+                model = SimpleEMNISTCNN(num_classes=62)
+                sd = torch.load(str(target_path), map_location=self.device)
+                if "model_state_dict" in sd:
+                    sd = sd["model_state_dict"]
+                elif "state_dict" in sd:
+                    sd = sd["state_dict"]
+                
+                try:
+                    model.load_state_dict(sd, strict=True)
+                except Exception:
+                    # Nếu là ResNet
+                    from modern_resnet import create_model
+                    model = create_model(num_classes=62)
+                    model.load_state_dict(sd, strict=False)
+
+                model.to(self.device).eval()
+                self.torch_model = model
+                print(f"[✓] Đã khởi tạo thành công Model AI trên {self.device} từ {target_path.name}")
+            except Exception as e:
+                print(f"[!] Lỗi nạp trọng số: {e}")
 
     def predict_single(self, input_tensor: np.ndarray, top_k: int = 5) -> Dict[str, Any]:
         """
         Suy luận 1 ký tự từ ma trận đầu vào (1, 1, 28, 28).
-        Trả về ký tự dự đoán tốt nhất, độ tin cậy và danh sách Top-K.
+        Tự động chuyển đổi trục ma trận (Transpose) phù hợp với chuẩn lưu trữ EMNIST.
         """
         t0 = time.perf_counter()
 
-        if self.use_onnx and self.session is not None:
-            input_name = self.session.get_inputs()[0].name
-            ort_inputs = {input_name: input_tensor.astype(np.float32)}
-            ort_outs = self.session.run(None, ort_inputs)
-            logits = ort_outs[0][0]
-            # Softmax
-            exp_logits = np.exp(logits - np.max(logits))
-            probs = exp_logits / exp_logits.sum()
-        elif self.torch_model is not None:
+        if self.torch_model is not None:
+            # EMNIST chuẩn được lưu theo row-major đảo trục: hoán vị (height <-> width)
+            # input_tensor có shape (1, 1, 28, 28)
+            norm_2d = input_tensor[0, 0]
+            transposed_2d = np.transpose(norm_2d)
+            model_in = np.expand_dims(np.expand_dims(transposed_2d, axis=0), axis=0)
+
             with torch.no_grad():
-                tensor = torch.from_numpy(input_tensor).float().to(self.device)
+                tensor = torch.from_numpy(model_in).float().to(self.device)
                 logits = self.torch_model(tensor)
                 probs = torch.softmax(logits, dim=1).cpu().numpy()[0]
         else:
-            # Fallback mô phỏng nếu chưa có file weights
             probs = np.zeros(len(self.class_names))
             probs[0] = 1.0
 
         latency_ms = (time.perf_counter() - t0) * 1000
 
-        # Lấy Top-K kết quả
         top_indices = np.argsort(probs)[::-1][:top_k]
         top_k_results = [
             {
