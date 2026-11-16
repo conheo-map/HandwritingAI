@@ -1,12 +1,3 @@
-"""
-segmentation.py — Bộ Bóc Tách Ký Tự và Từ Viết Tay Tự Động (Document & Word Segmentation Engine)
-Tác giả: Truong Duy Cuong
-
-Chức năng:
-  - Tự động phát hiện dòng chữ, từ ngữ và từng ký tự riêng lẻ từ ảnh chụp giấy viết tay
-  - Sắp xếp các ký tự theo đúng thứ tự đọc tự nhiên từ trái sang phải (Left-to-Right)
-  - Cắt và chuẩn hóa từng ký tự sẵn sàng cho mô hình suy luận
-"""
 
 import cv2
 import numpy as np

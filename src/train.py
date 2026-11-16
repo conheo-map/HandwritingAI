@@ -1,8 +1,3 @@
-"""
-train.py — Script Huấn luyện Mô hình Deep ResNet SOTA trên Tập Dữ liệu EMNIST
-Tác giả: Truong Duy Cuong
-"""
-
 import os
 import sys
 import time
@@ -25,10 +20,10 @@ from src.modern_resnet import create_model
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Huấn luyện mô hình HandwritingAI")
-    parser.add_argument("--epochs", type=int, default=20, help="Số lượng epoch huấn luyện")
-    parser.add_argument("--batch-size", type=int, default=128, help="Kích thước batch")
+    parser.add_argument("--epochs", type=int, default=8, help="Số lượng epoch huấn luyện")
+    parser.add_argument("--batch-size", type=int, default=256, help="Kích thước batch")
     parser.add_argument("--lr", type=float, default=1e-3, help="Tốc độ học ban đầu")
-    parser.add_argument("--split", type=str, default="byclass", choices=["byclass", "bymerge"], help="Biến thể EMNIST")
+    parser.add_argument("--split", type=str, default="balanced", choices=["byclass", "bymerge", "balanced"], help="Biến thể EMNIST")
     parser.add_argument("--save-dir", type=str, default="models", help="Thư mục lưu trọng số")
     return parser.parse_args()
 
@@ -68,9 +63,9 @@ def train():
     train_size = len(full_train) - val_size
     train_set, val_set = random_split(full_train, [train_size, val_size])
 
-    train_loader = DataLoader(train_set, batch_size=args.batch_size, shuffle=True, num_workers=2, pin_memory=True)
-    val_loader = DataLoader(val_set, batch_size=args.batch_size, shuffle=False, num_workers=2, pin_memory=True)
-    test_loader = DataLoader(test_set, batch_size=args.batch_size, shuffle=False, num_workers=2, pin_memory=True)
+    train_loader = DataLoader(train_set, batch_size=args.batch_size, shuffle=True, num_workers=0, pin_memory=True)
+    val_loader = DataLoader(val_set, batch_size=args.batch_size, shuffle=False, num_workers=0, pin_memory=True)
+    test_loader = DataLoader(test_set, batch_size=args.batch_size, shuffle=False, num_workers=0, pin_memory=True)
 
     print(f"[✓] Train: {len(train_set):,} ảnh | Val: {len(val_set):,} ảnh | Test: {len(test_set):,} ảnh")
 

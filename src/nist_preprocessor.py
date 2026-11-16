@@ -1,6 +1,4 @@
 """
-nist_preprocessor.py — Thuật toán Chuẩn hóa Nét vẽ Chuẩn NIST (Center of Mass Normalization)
-Tác giả: Truong Duy Cuong
 
 Quy trình chuẩn hóa toán học 5 bước chuẩn EMNIST:
   1. Nhị phân hóa & Cắt vùng biên (Bounding Box Extraction)
@@ -111,8 +109,12 @@ class NISTPreprocessor:
             cx, cy = 14.0, 14.0
             centered = padded
 
-        # 8. Chuẩn hóa về [0.0, 1.0]
-        normalized = centered.astype(np.float32) / 255.0
+        # 8. Chuẩn hóa về [0.0, 1.0] với cân bằng cường độ đỉnh (Peak Normalization)
+        max_val = float(np.max(centered))
+        if max_val > 10.0:
+            normalized = centered.astype(np.float32) / max_val
+        else:
+            normalized = centered.astype(np.float32) / 255.0
 
         return {
             "step1_gray": gray_clean,

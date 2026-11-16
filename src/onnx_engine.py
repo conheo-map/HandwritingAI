@@ -1,7 +1,3 @@
-"""
-onnx_engine.py — Động cơ Suy Luận Siêu Tốc (High-Speed Inference Engine)
-Tác giả: Truong Duy Cuong
-"""
 
 import string
 import time
@@ -13,6 +9,11 @@ from typing import List, Dict, Any
 
 # Bản đồ 62 ký tự EMNIST ByClass chuẩn
 EMNIST_BYCLASS_CHARS = list(string.digits + string.ascii_uppercase + string.ascii_lowercase)
+
+# Bản đồ 47 ký tự EMNIST Balanced chuẩn (NIST Benchmark)
+EMNIST_BALANCED_CHARS = list(string.digits + string.ascii_uppercase) + [
+    'a', 'b', 'd', 'e', 'f', 'g', 'h', 'n', 'q', 'r', 't'
+]
 
 
 class SimpleEMNISTCNN(nn.Module):
@@ -55,8 +56,8 @@ class InferenceEngine:
             target_path = Path(model_path)
         else:
             candidates = [
-                models_dir / "best_emnist_cnn.pt",
-                models_dir / "best_emnist_resnet.pt"
+                models_dir / "best_emnist_resnet.pt",
+                models_dir / "best_emnist_cnn.pt"
             ]
             for c in candidates:
                 if c.exists():
@@ -65,27 +66,39 @@ class InferenceEngine:
 
         if target_path and target_path.exists():
             try:
-                # Thử nạp SimpleEMNISTCNN trước
-                model = SimpleEMNISTCNN(num_classes=62)
                 sd = torch.load(str(target_path), map_location=self.device)
-                if "model_state_dict" in sd:
-                    sd = sd["model_state_dict"]
-                elif "state_dict" in sd:
-                    sd = sd["state_dict"]
-                
-                try:
-                    model.load_state_dict(sd, strict=True)
-                except Exception:
-                    # Nếu là ResNet
+                num_classes = 62
+                if isinstance(sd, dict):
+                    if "classes" in sd:
+                        num_classes = sd["classes"]
+                    if "model_state_dict" in sd:
+                        sd = sd["model_state_dict"]
+                    elif "state_dict" in sd:
+                        sd = sd["state_dict"]
+
+                # Cập nhật danh sách nhãn tương ứng
+                if num_classes == 47:
+                    self.class_names = EMNIST_BALANCED_CHARS
+                else:
+                    self.class_names = EMNIST_BYCLASS_CHARS
+
+                # Kiểm tra nạp vào ResNet hay SimpleCNN
+                if "resnet" in target_path.name.lower() or "stage1.conv1.weight" in sd:
                     from modern_resnet import create_model
-                    model = create_model(num_classes=62)
+                    model = create_model(num_classes=num_classes)
                     model.load_state_dict(sd, strict=False)
+                    self.needs_transpose = False
+                else:
+                    model = SimpleEMNISTCNN(num_classes=num_classes)
+                    model.load_state_dict(sd, strict=True)
+                    self.needs_transpose = True
 
                 model.to(self.device).eval()
                 self.torch_model = model
-                print(f"[✓] Đã khởi tạo thành công Model AI trên {self.device} từ {target_path.name}")
+                print(f"[✓] Đã khởi tạo thành công Model AI ({num_classes} lớp) trên {self.device} từ {target_path.name}")
             except Exception as e:
                 print(f"[!] Lỗi nạp trọng số: {e}")
+                self.needs_transpose = False
 
     def predict_single(
         self, 
@@ -105,8 +118,9 @@ class InferenceEngine:
         if self.torch_model is not None:
             # EMNIST chuẩn được lưu theo row-major đảo trục: hoán vị (height <-> width)
             norm_2d = input_tensor[0, 0]
-            transposed_2d = np.transpose(norm_2d)
-            model_in = np.expand_dims(np.expand_dims(transposed_2d, axis=0), axis=0)
+            if getattr(self, "needs_transpose", False):
+                norm_2d = np.transpose(norm_2d)
+            model_in = np.expand_dims(np.expand_dims(norm_2d, axis=0), axis=0)
 
             with torch.no_grad():
                 tensor = torch.from_numpy(model_in).float().to(self.device)
