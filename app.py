@@ -82,16 +82,31 @@ bg_color = st.sidebar.color_picker("Màu nền canvas:", "#000000")
 st.title("Handwriting Recognition")
 st.caption("Nhận diện ký tự và từ viết tay thời gian thực bằng mô hình Deep ResNet-18 và chuẩn hóa NIST Center-of-Mass.")
 
-tab1, tab2, tab3 = st.tabs([
-    "Bảng vẽ tương tác",
-    "Nhận diện từ ngữ",
-    "Phân tích thuật toán"
-])
+# CSS định hình đường viền khung vẽ rõ ràng
+st.markdown(
+    """
+    <style>
+    iframe[title="streamlit_drawable_canvas.st_canvas"] {
+        border: 1px solid #4B5563 !important;
+        border-radius: 6px !important;
+        background-color: #0E1117 !important;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
+active_mode = st.radio(
+    "Điều hướng chế độ:",
+    ["Bảng vẽ tương tác", "Nhận diện từ ngữ", "Phân tích thuật toán"],
+    horizontal=True,
+    label_visibility="collapsed"
+)
 
 # ══════════════════════════════════════════════════════════════════════════
-# TAB 1: BẢNG VẼ TƯƠNG TÁC TRỰC TIẾP
+# CHẾ ĐỘ 1: BẢNG VẼ TƯƠNG TÁC TRỰC TIẾP
 # ══════════════════════════════════════════════════════════════════════════
-with tab1:
+if active_mode == "Bảng vẽ tương tác":
     st.subheader("Nhận diện ký tự trực tiếp")
     st.caption("Vẽ ký tự vào khung bên trái. Mô hình sẽ trích xuất ma trận 28x28 và dự đoán phân bố xác suất Softmax.")
 
@@ -118,6 +133,7 @@ with tab1:
             raw_img = canvas_result.image_data
             if np.any(raw_img[:, :, :3] > 0):
                 debug_steps = preprocessor.preprocess_with_steps(raw_img)
+                st.session_state["debug_steps"] = debug_steps
                 norm_28 = debug_steps["normalized"]
                 display_28 = (norm_28 * 255).astype(np.uint8)
                 display_large = cv2.resize(display_28, (200, 200), interpolation=cv2.INTER_NEAREST)
@@ -176,9 +192,9 @@ with tab1:
             st.info("Chờ nét vẽ để thực hiện suy luận...")
 
 # ══════════════════════════════════════════════════════════════════════════
-# TAB 2: NHẬN DIỆN CHUỖI KÝ TỰ & TỪ VIẾT TAY (WORD OCR)
+# CHẾ ĐỘ 2: NHẬN DIỆN CHUỖI KÝ TỰ & TỪ VIẾT TAY (WORD OCR)
 # ══════════════════════════════════════════════════════════════════════════
-with tab2:
+elif active_mode == "Nhận diện từ ngữ":
     st.subheader("Nhận diện chuỗi ký tự viết tay")
     st.markdown("Hỗ trợ vẽ trực tiếp cả chuỗi ký tự lên bảng vẽ hoặc tải ảnh tài liệu lên để phân đoạn và nhận diện.")
 
@@ -315,11 +331,13 @@ with tab2:
                 st.info("Tải lên ảnh chứa chữ viết tay ở cột bên trái.")
 
 # ══════════════════════════════════════════════════════════════════════════
-# TAB 3: BÓC TÁCH THUẬT TOÁN TRỰC QUAN (ALGORITHM VISUALIZER)
+# CHẾ ĐỘ 3: BÓC TÁCH THUẬT TOÁN TRỰC QUAN (ALGORITHM VISUALIZER)
 # ══════════════════════════════════════════════════════════════════════════
-with tab3:
+else:
     st.subheader("Trực quan hóa pipeline tiền xử lý")
     st.markdown("Biểu diễn quy trình chuẩn hóa từ nét vẽ ban đầu đến ma trận 28x28 đưa vào mạng nơ-ron.")
+
+    debug_steps = st.session_state.get("debug_steps", None)
 
     if debug_steps is not None and debug_steps["bbox"][2] > 0:
         st.markdown("#### 1. Quy trình chuẩn hóa NIST 5 bước")
