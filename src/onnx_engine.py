@@ -100,6 +100,41 @@ class InferenceEngine:
                 print(f"[!] Lỗi nạp trọng số: {e}")
                 self.needs_transpose = False
 
+        # Tải cụm chuyên gia (Mixture of Experts)
+        self.expert_digits = None
+        self.digits_classes = list(string.digits)
+
+        self.expert_letters = None
+        self.letters_classes = list(string.ascii_uppercase)
+
+        # Chuyên gia Chữ số (10 lớp)
+        dig_path = models_dir / "resnet_digits.pt"
+        if dig_path.exists():
+            try:
+                from modern_resnet import create_model
+                sd = torch.load(str(dig_path), map_location=self.device)
+                m = create_model(num_classes=10)
+                m.load_state_dict(sd["model_state_dict"])
+                m.to(self.device).eval()
+                self.expert_digits = m
+                print(f"[✓] Đã kích hoạt Chuyên Gia Chữ Số (10 lớp) trên {self.device}")
+            except Exception as e:
+                pass
+
+        # Chuyên gia Chữ cái (26 lớp)
+        let_path = models_dir / "resnet_letters.pt"
+        if let_path.exists():
+            try:
+                from modern_resnet import create_model
+                sd = torch.load(str(let_path), map_location=self.device)
+                m = create_model(num_classes=26)
+                m.load_state_dict(sd["model_state_dict"])
+                m.to(self.device).eval()
+                self.expert_letters = m
+                print(f"[✓] Đã kích hoạt Chuyên Gia Chữ Cái (26 lớp) trên {self.device}")
+            except Exception as e:
+                pass
+
     def predict_single(
         self, 
         input_tensor: np.ndarray, 
@@ -109,37 +144,48 @@ class InferenceEngine:
     ) -> Dict[str, Any]:
         """
         Suy luận 1 ký tự từ ma trận đầu vào (1, 1, 28, 28).
-        Hỗ trợ:
-          - Temperature Scaling: Làm sắc nét phân bố xác suất Softmax.
-          - Context Filter: Lọc theo ngữ cảnh ('all', 'digits', 'letters').
+        Tự động định tuyến (Dynamic Routing) đến mô hình chuyên gia:
+          - 'digits' -> Chuyên gia Chữ số (10 lớp)
+          - 'letters' -> Chuyên gia Chữ cái (26 lớp)
+          - 'all' -> Mô hình đa năng EMNIST (47 lớp)
         """
         t0 = time.perf_counter()
 
-        if self.torch_model is not None:
-            # EMNIST chuẩn được lưu theo row-major đảo trục: hoán vị (height <-> width)
+        active_model = self.torch_model
+        active_classes = self.class_names
+        is_expert = False
+
+        if filter_mode == "digits" and self.expert_digits is not None:
+            active_model = self.expert_digits
+            active_classes = self.digits_classes
+            is_expert = True
+        elif filter_mode == "letters" and self.expert_letters is not None:
+            active_model = self.expert_letters
+            active_classes = self.letters_classes
+            is_expert = True
+
+        if active_model is not None:
             norm_2d = input_tensor[0, 0]
-            if getattr(self, "needs_transpose", False):
+            if getattr(self, "needs_transpose", False) and not is_expert:
                 norm_2d = np.transpose(norm_2d)
             model_in = np.expand_dims(np.expand_dims(norm_2d, axis=0), axis=0)
 
             with torch.no_grad():
                 tensor = torch.from_numpy(model_in).float().to(self.device)
-                logits = self.torch_model(tensor)[0]  # (62,)
+                logits = active_model(tensor)[0]
 
-                # 1. Bộ lọc ngữ cảnh (Context Masking)
-                if filter_mode == "digits":
-                    # Chỉ giữ lại 0-9 (index 0 đến 9), triệt tiêu chữ cái
-                    logits[10:] = -1e9
-                elif filter_mode == "letters":
-                    # Chỉ giữ lại chữ cái (index 10 đến 61), triệt tiêu chữ số
-                    logits[:10] = -1e9
+                # Nếu là model tổng quát mà người dùng chọn filter, thực hiện mask
+                if not is_expert:
+                    if filter_mode == "digits":
+                        logits[10:] = -1e9
+                    elif filter_mode == "letters":
+                        logits[:10] = -1e9
 
-                # 2. Temperature Scaling để làm sắc nét phân bố xác suất
                 T = max(0.1, min(temperature, 2.0))
                 scaled_logits = logits / T
                 probs = torch.softmax(scaled_logits, dim=0).cpu().numpy()
         else:
-            probs = np.zeros(len(self.class_names))
+            probs = np.zeros(len(active_classes))
             probs[0] = 1.0
 
         latency_ms = (time.perf_counter() - t0) * 1000
@@ -147,12 +193,12 @@ class InferenceEngine:
         top_indices = np.argsort(probs)[::-1][:top_k]
         top_k_results = [
             {
-                "character": self.class_names[idx],
+                "character": active_classes[idx],
                 "confidence": float(probs[idx]),
                 "index": int(idx),
-                "is_digit": self.class_names[idx].isdigit(),
-                "is_upper": self.class_names[idx].isupper(),
-                "is_lower": self.class_names[idx].islower()
+                "is_digit": active_classes[idx].isdigit(),
+                "is_upper": active_classes[idx].isupper(),
+                "is_lower": active_classes[idx].islower()
             }
             for idx in top_indices
         ]
