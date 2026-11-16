@@ -1,6 +1,5 @@
 """
-app.py — Hệ Thống Nhận Diện Ký Tự & Văn Bản Viết Tay Thời Gian Thực (HandwritingAI Studio)
-Tác giả: Truong Duy Cuong
+app.py — Hệ thống nhận diện ký tự và văn bản viết tay (Handwriting Recognition Studio)
 """
 
 import os
@@ -26,10 +25,9 @@ from nist_preprocessor import NISTPreprocessor
 from onnx_engine import InferenceEngine
 from segmentation import WordSegmenter
 
-# Cấu hình trang giao diện
+# Cấu hình trang
 st.set_page_config(
-    page_title="HandwritingAI Studio — Hệ Thống Nhận Diện Chữ Viết Tay SOTA",
-    page_icon="✍️",
+    page_title="Handwriting Recognition",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -46,9 +44,9 @@ def load_system_modules():
 preprocessor, segmenter, engine = load_system_modules()
 
 # ── THANH ĐIỀU KHIỂN BÊN TRÁI ──
-st.sidebar.title("⚙️ Cấu Hình")
+st.sidebar.title("Cấu hình")
 
-st.sidebar.subheader("🎯 Không Gian Ký Tự")
+st.sidebar.subheader("Không gian ký tự")
 context_choice = st.sidebar.selectbox(
     "Bộ lọc ký tự (Context Filter):",
     options=[
@@ -66,7 +64,7 @@ filter_mode_map = {
 selected_filter = filter_mode_map[context_choice]
 
 temperature_val = st.sidebar.slider(
-    "Độ sắc nét Softmax (Temperature T):",
+    "Hệ số nhiệt độ Softmax (Temperature T):",
     min_value=0.1,
     max_value=1.0,
     value=0.35,
@@ -75,33 +73,33 @@ temperature_val = st.sidebar.slider(
 )
 
 st.sidebar.markdown("---")
-st.sidebar.subheader("🖌️ Nét Bút Vẽ Canvas")
-stroke_width = st.sidebar.slider("Độ dày nét bút (Stroke Width):", min_value=12, max_value=36, value=22, step=2)
+st.sidebar.subheader("Nét bút vẽ")
+stroke_width = st.sidebar.slider("Độ dày nét bút (pixels):", min_value=12, max_value=36, value=22, step=2)
 stroke_color = st.sidebar.color_picker("Màu nét bút:", "#FFFFFF")
-bg_color = st.sidebar.color_picker("Màu nền Canvas:", "#000000")
+bg_color = st.sidebar.color_picker("Màu nền canvas:", "#000000")
 
 # ── TIÊU ĐỀ CHÍNH ──
-st.title("✍️ Handwriting Recognition Studio")
-st.caption("Nhận diện ký tự và từ ngữ viết tay thời gian thực với Mạng Nơ-ron Tích Chập (Deep ResNet-18) và chuẩn hóa NIST Center-of-Mass.")
+st.title("Handwriting Recognition")
+st.caption("Nhận diện ký tự và từ viết tay thời gian thực bằng mô hình Deep ResNet-18 và chuẩn hóa NIST Center-of-Mass.")
 
 tab1, tab2, tab3 = st.tabs([
-    "✍️ Bảng Vẽ Tương Tác (Interactive Canvas)",
-    "📷 Nhận Diện Từ / Dòng Chữ (Word OCR)",
-    "🔬 Phân Tích Thuật Toán (Algorithm Visualizer)"
+    "Bảng vẽ tương tác",
+    "Nhận diện từ ngữ",
+    "Phân tích thuật toán"
 ])
 
 # ══════════════════════════════════════════════════════════════════════════
 # TAB 1: BẢNG VẼ TƯƠNG TÁC TRỰC TIẾP
 # ══════════════════════════════════════════════════════════════════════════
 with tab1:
-    st.subheader("🎯 Vẽ Bất Kỳ Chữ Số Hoặc Chữ Cái Nào Vào Khung Bên Dưới:")
-    st.caption("Hệ thống sẽ tự động bắt nét, căn trọng tâm chuẩn NIST và xuất phân bố xác suất Softmax theo thời gian thực.")
+    st.subheader("Nhận diện ký tự trực tiếp")
+    st.caption("Vẽ ký tự vào khung bên trái. Mô hình sẽ trích xuất ma trận 28x28 và dự đoán phân bố xác suất Softmax.")
 
     col_canvas, col_preview, col_pred = st.columns([1.2, 0.8, 1.2], gap="medium")
 
     debug_steps = None
     with col_canvas:
-        st.markdown("##### 🖌️ Khung Vẽ Canvas (Vẽ tự nhiên):")
+        st.markdown("##### Khung vẽ:")
         canvas_result = st_canvas(
             fill_color="rgba(255, 255, 255, 0.0)",
             stroke_width=stroke_width,
@@ -112,10 +110,10 @@ with tab1:
             drawing_mode="freedraw",
             key="handwriting_canvas",
         )
-        st.caption("💡 Mẹo: Hãy vẽ nét chữ dứt khoát. Bạn có thể bấm nút thùng rác nhỏ ở góc dưới bảng vẽ để xóa.")
+        st.caption("Mẹo: Vẽ nét dứt khoát. Sử dụng biểu tượng thùng rác ở góc dưới để xóa.")
 
     with col_preview:
-        st.markdown("##### 🔬 Chuẩn Hóa NIST 28×28:")
+        st.markdown("##### Chuẩn hóa NIST (28x28):")
         if canvas_result.image_data is not None:
             raw_img = canvas_result.image_data
             if np.any(raw_img[:, :, :3] > 0):
@@ -123,15 +121,15 @@ with tab1:
                 norm_28 = debug_steps["normalized"]
                 display_28 = (norm_28 * 255).astype(np.uint8)
                 display_large = cv2.resize(display_28, (200, 200), interpolation=cv2.INTER_NEAREST)
-                st.image(display_large, caption=f"Ma trận 28×28 căn trọng tâm ({debug_steps['centroid'][0]:.1f}, {debug_steps['centroid'][1]:.1f})", width=200)
+                st.image(display_large, caption=f"Trọng tâm: ({debug_steps['centroid'][0]:.1f}, {debug_steps['centroid'][1]:.1f})", width=200)
             else:
-                st.info("👈 Hãy vẽ một chữ cái hoặc chữ số lên khung bên trái.")
+                st.info("Vẽ một ký tự vào khung bên trái.")
                 norm_28 = None
         else:
             norm_28 = None
 
     with col_pred:
-        st.markdown("##### 🏆 Kết Quả Dự Đoán AI:")
+        st.markdown("##### Kết quả dự đoán:")
         if norm_28 is not None and np.max(norm_28) > 0.05:
             tensor_in = preprocessor.to_model_input(norm_28)
             res = engine.predict_single(
@@ -147,121 +145,114 @@ with tab1:
 
             if best_char.isdigit():
                 char_type = "Chữ số (Digit)"
-                badge_color = "#3498DB"
             elif best_char.isupper():
-                char_type = "Chữ cái IN HOA (Uppercase)"
-                badge_color = "#2ECC71"
+                char_type = "Chữ cái in hoa (Uppercase)"
             else:
                 char_type = "Chữ cái thường (Lowercase)"
-                badge_color = "#E67E22"
 
             st.markdown(
                 f"""
-                <div style="background: linear-gradient(135deg, #1E1E2F 0%, #2A2A40 100%); padding: 20px; border-radius: 12px; border: 2px solid {badge_color}; text-align: center;">
+                <div style="background-color: #1E1E2E; padding: 20px; border-radius: 8px; border: 1px solid #4B5563; text-align: center;">
                     <span style="font-size: 72px; font-weight: bold; color: #FFFFFF; font-family: monospace;">{best_char}</span>
                     <br>
-                    <span style="background-color: {badge_color}; color: white; padding: 4px 12px; border-radius: 20px; font-size: 14px; font-weight: bold;">{char_type}</span>
-                    <p style="margin-top: 10px; color: #BDC3C7; font-size: 15px;">Độ tin cậy: <b>{conf * 100:.2f}%</b> | Độ trễ suy luận: <b>{latency:.2f} ms</b></p>
+                    <span style="background-color: #374151; color: #E5E7EB; padding: 4px 12px; border-radius: 12px; font-size: 13px;">{char_type}</span>
+                    <p style="margin-top: 10px; color: #9CA3AF; font-size: 14px;">Độ tin cậy: <b>{conf * 100:.2f}%</b> | Độ trễ: <b>{latency:.2f} ms</b></p>
                 </div>
                 """,
                 unsafe_allow_html=True
             )
 
-            st.markdown("##### 📊 Top 5 Khả Năng Cao Nhất (Softmax Output):")
+            st.markdown("##### Top 5 xác suất Softmax:")
             top_df = pd.DataFrame([
                 {
                     "Ký tự": f"'{item['character']}'",
                     "Xác suất Softmax (%)": round(item["confidence"] * 100, 2),
-                    "Phân loại": "Chữ số" if item["is_digit"] else ("IN HOA" if item["is_upper"] else "Thường")
+                    "Phân loại": "Chữ số" if item["is_digit"] else ("In hoa" if item["is_upper"] else "Thường")
                 }
                 for item in res["top_k"]
             ])
             st.dataframe(top_df, hide_index=True)
         else:
-            st.info("Chờ nét vẽ để kích hoạt mạng nơ-ron...")
+            st.info("Chờ nét vẽ để thực hiện suy luận...")
 
 # ══════════════════════════════════════════════════════════════════════════
 # TAB 2: NHẬN DIỆN TỪ / DÒNG CHỮ VIẾT TAY (WORD OCR)
 # ══════════════════════════════════════════════════════════════════════════
 with tab2:
-    st.subheader("📷 Nhận Diện Toàn Bộ Từ Hoặc Dòng Chữ Từ Ảnh Chụp")
-    st.markdown("Tự động bóc tách (Segmentation) từng ký tự trong từ viết tay theo trục tọa độ không gian từ trái sang phải.")
+    st.subheader("Nhận diện chuỗi ký tự từ ảnh")
+    st.markdown("Tách ký tự (Segmentation) theo trục tọa độ không gian từ trái sang phải.")
 
     col_up, col_ocr_res = st.columns([1, 1], gap="large")
 
     with col_up:
-        up_doc = st.file_uploader("Tải ảnh chụp từ hoặc chuỗi số viết tay (JPG, PNG):", type=["jpg", "jpeg", "png"], key="word_uploader")
+        up_doc = st.file_uploader("Tải ảnh chứa chữ viết tay (JPG, PNG):", type=["jpg", "jpeg", "png"], key="word_uploader")
         if up_doc:
             doc_img = Image.open(up_doc)
-            st.image(doc_img, caption="Ảnh gốc tải lên")
+            st.image(doc_img, caption="Ảnh gốc")
 
     with col_ocr_res:
         if up_doc:
-            with st.spinner("Đang bóc tách đường biên và nhận diện chuỗi ký tự..."):
+            with st.spinner("Đang xử lý phân đoạn và nhận diện..."):
                 segmented = segmenter.segment_image(doc_img)
                 if segmented:
                     word_res = engine.predict_word(segmented)
 
-                    st.success(f"### 🔤 Kết Quả Nhận Diện: `{word_res['predicted_text']}`")
-                    st.metric("Tổng Số Ký Tự Bóc Tách", word_res["num_characters"])
-                    st.metric("Tổng Thời Gian Nhận Diện", f"{word_res['total_latency_ms']:.2f} ms")
+                    st.success(f"Kết quả nhận diện: `{word_res['predicted_text']}`")
+                    st.metric("Tổng số ký tự", word_res["num_characters"])
+                    st.metric("Tổng thời gian", f"{word_res['total_latency_ms']:.2f} ms")
 
-                    st.markdown("##### 🔍 Chi Tiết Từng Ký Tự Được Bóc Tách:")
+                    st.markdown("##### Chi tiết từng ký tự:")
                     cols_char = st.columns(min(len(segmented), 6))
                     for i, item in enumerate(segmented[:6]):
                         with cols_char[i]:
-                            st.image(item["char_crop"], caption=f"Ký tự #{i+1}: '{word_res['characters'][i]['char']}'", width=60)
+                            st.image(item["char_crop"], caption=f"#{i+1}: '{word_res['characters'][i]['char']}'", width=60)
                 else:
-                    st.warning("Không tìm thấy nét chữ rõ ràng trong ảnh. Hãy thử ảnh có độ tương phản cao hơn.")
+                    st.warning("Không tìm thấy nét chữ rõ ràng trong ảnh.")
         else:
-            st.info("👈 Hãy tải lên ảnh chụp chữ viết tay ở cột bên trái để thử nghiệm tính năng OCR.")
+            st.info("Tải lên ảnh chứa chữ viết tay ở cột bên trái.")
 
 # ══════════════════════════════════════════════════════════════════════════
 # TAB 3: BÓC TÁCH THUẬT TOÁN TRỰC QUAN (ALGORITHM VISUALIZER)
 # ══════════════════════════════════════════════════════════════════════════
 with tab3:
-    st.subheader("🔬 Chiếu X-Quang Toàn Bộ Pipeline Thuật Toán (Algorithm Visualizer)")
-    st.markdown(
-        "Mục này giải thích **từng bước chuyển dịch toán học từ nét vẽ tay tự do sang ma trận tensor đầu vào** của Mạng Nơ-ron. "
-        "Dùng tab này để trình chiếu trực tiếp khi thuyết trình trước giảng viên!"
-    )
+    st.subheader("Trực quan hóa pipeline tiền xử lý")
+    st.markdown("Biểu diễn quy trình chuẩn hóa từ nét vẽ ban đầu đến ma trận 28x28 đưa vào mạng nơ-ron.")
 
     if debug_steps is not None and debug_steps["bbox"][2] > 0:
-        st.markdown("#### 1. Quy Trình 5 Bước Tiền Xử Lý Chuẩn Hóa NIST")
+        st.markdown("#### 1. Quy trình chuẩn hóa NIST 5 bước")
         s1, s2, s3, s4, s5 = st.columns(5)
 
         with s1:
-            st.image(debug_steps["step1_gray"], caption="Bước 1: Ảnh Xám & Lọc Nhiễu", width=120)
-            st.caption("Khử kênh alpha, chuyển nền đen chữ trắng, Gaussian Blur 3x3.")
+            st.image(debug_steps["step1_gray"], caption="Bước 1: Ảnh xám", width=120)
+            st.caption("Khử kênh alpha, chuyển nền đen chữ trắng, Gaussian Blur.")
 
         with s2:
-            st.image(debug_steps["step2_crop"], caption=f"Bước 2: Cắt Biên w={debug_steps['bbox'][2]}, h={debug_steps['bbox'][3]}", width=120)
-            st.caption("Loại bỏ 100% khoảng trống thừa, chỉ giữ lại vùng chứa nét mực.")
+            st.image(debug_steps["step2_crop"], caption=f"Bước 2: Cắt biên ({debug_steps['bbox'][2]}x{debug_steps['bbox'][3]})", width=120)
+            st.caption("Cắt sát vùng nét mực.")
 
         with s3:
-            st.image(debug_steps["step3_resized"], caption="Bước 3: Fit Khung 20×20", width=120)
-            st.caption("Co giãn cạnh lớn nhất về 20px, giữ nguyên tỷ lệ Aspect Ratio.")
+            st.image(debug_steps["step3_resized"], caption="Bước 3: Tỷ lệ 20x20", width=120)
+            st.caption("Co giãn giữ nguyên Aspect Ratio.")
 
         with s4:
-            st.image(debug_steps["step4_padded"], caption="Bước 4: Đệm Viền 28×28", width=120)
-            st.caption("Thêm viền đen đối xứng để đưa về kích thước chuẩn 28x28.")
+            st.image(debug_steps["step4_padded"], caption="Bước 4: Đệm viền 28x28", width=120)
+            st.caption("Thêm viền đen đối xứng.")
 
         with s5:
-            st.image(debug_steps["step5_centered"], caption=f"Bước 5: Căn Trọng Tâm ({debug_steps['centroid'][0]:.1f}, {debug_steps['centroid'][1]:.1f})", width=120)
-            st.caption(f"Tịnh tiến (Δx={debug_steps['shift'][0]}, Δy={debug_steps['shift'][1]}) về tâm chuẩn (14, 14).")
+            st.image(debug_steps["step5_centered"], caption=f"Bước 5: Căn trọng tâm", width=120)
+            st.caption(f"Tịnh tiến (Δx={debug_steps['shift'][0]}, Δy={debug_steps['shift'][1]}) về (14, 14).")
 
         st.markdown("---")
-        st.markdown("#### 2. Cơ Sở Toán Học Trọng Tâm Điểm Ảnh (Image Moments Centroid)")
+        st.markdown("#### 2. Cơ sở toán học trọng tâm điểm ảnh (Image Moments Centroid)")
         st.latex(r"\bar{x} = \frac{\sum_{x, y} x \cdot I(x, y)}{\sum_{x, y} I(x, y)}, \quad \bar{y} = \frac{\sum_{x, y} y \cdot I(x, y)}{\sum_{x, y} I(x, y)}")
         st.markdown(
             f"""
-            - **Trọng tâm thực tế tính được:** $(\\bar{{x}}={debug_steps['centroid'][0]:.2f}, \\bar{{y}}={debug_steps['centroid'][1]:.2f})$
-            - **Vector dịch chuyển tịnh tiến:** $(\\Delta x = 14 - \\bar{{x}} = {debug_steps['shift'][0]}, \\Delta y = 14 - \\bar{{y}} = {debug_steps['shift'][1]})$
-            - **Ý nghĩa:** Triệt tiêu hoàn toàn sự sai lệch do người dùng vẽ chữ ở góc trên, góc dưới, to hay nhỏ!
+            - **Trọng tâm tính được:** $(\\bar{{x}}={debug_steps['centroid'][0]:.2f}, \\bar{{y}}={debug_steps['centroid'][1]:.2f})$
+            - **Độ lệch tịnh tiến:** $(\\Delta x = {debug_steps['shift'][0]}, \\Delta y = {debug_steps['shift'][1]})$
             """
         )
     else:
-        st.info("👈 Hãy sang Tab 1 vẽ một chữ cái, sau đó quay lại đây để xem X-quang từng bước thuật toán biến đổi!")
+        st.info("Vẽ một chữ cái ở Tab 1 để xem các bước chuyển đổi.")
 
 
 if __name__ == "__main__":
