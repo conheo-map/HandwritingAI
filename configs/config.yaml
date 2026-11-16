@@ -1,0 +1,37 @@
+project:
+  name: "HandwritingAI"
+  description: "Hệ Thống Nhận Diện Ký Tự & Văn Bản Viết Tay Thời Gian Thực Chuẩn SOTA"
+  version: "1.0.0"
+  author: "Truong Duy Cuong"
+
+dataset:
+  name: "EMNIST"
+  variant: "byclass"     # Options: 'byclass' (62 classes) or 'bymerge' (47 classes)
+  num_classes: 62
+  image_size: [28, 28]
+  channels: 1
+  data_dir: "data"
+  batch_size: 128
+  num_workers: 4
+
+model:
+  architecture: "DeepResNet"
+  in_channels: 1
+  base_channels: 32
+  dropout_rate: 0.25
+  label_smoothing: 0.05
+
+training:
+  epochs: 25
+  learning_rate: 0.001
+  weight_decay: 0.0001
+  optimizer: "AdamW"
+  scheduler: "CosineAnnealingLR"
+  early_stopping_patience: 5
+  mixed_precision: true     # FP16 Automatic Mixed Precision (AMP) on RTX 2050
+
+inference:
+  onnx_model_path: "models/emnist_resnet.onnx"
+  torch_model_path: "models/best_emnist_resnet.pt"
+  top_k: 5
+  center_of_mass_threshold: 0.05
