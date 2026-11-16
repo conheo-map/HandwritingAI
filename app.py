@@ -52,6 +52,33 @@ st.sidebar.markdown("**Môn học:** Trí Tuệ Nhân Tạo (Chương 6: Học M
 st.sidebar.markdown("**Phiên bản:** v1.0.0 Production")
 
 st.sidebar.markdown("---")
+st.sidebar.subheader("🎯 Tối Ưu Độ Chính Xác & Ngữ Cảnh")
+context_choice = st.sidebar.selectbox(
+    "Bộ lọc không gian ký tự (Context Filter):",
+    options=[
+        "Toàn bộ 62 ký tự (0-9, A-Z, a-z)",
+        "Chỉ chữ số (Digits 0-9)",
+        "Chỉ chữ cái (Letters A-Z, a-z)"
+    ],
+    index=0
+)
+filter_mode_map = {
+    "Toàn bộ 62 ký tự (0-9, A-Z, a-z)": "all",
+    "Chỉ chữ số (Digits 0-9)": "digits",
+    "Chỉ chữ cái (Letters A-Z, a-z)": "letters"
+}
+selected_filter = filter_mode_map[context_choice]
+
+temperature_val = st.sidebar.slider(
+    "Độ sắc nét Softmax (Temperature T):",
+    min_value=0.1,
+    max_value=1.0,
+    value=0.35,
+    step=0.05,
+    help="T càng nhỏ thì đỉnh xác suất của lớp cao nhất càng tập trung, triệt tiêu phân tán đều."
+)
+
+st.sidebar.markdown("---")
 st.sidebar.subheader("⚙️ Cấu Hình Bút Vẽ Canvas")
 stroke_width = st.sidebar.slider("Độ dày nét bút (Stroke Width):", min_value=12, max_value=36, value=22, step=2)
 stroke_color = st.sidebar.color_picker("Màu nét bút:", "#FFFFFF")
@@ -127,7 +154,12 @@ with tab1:
         st.markdown("##### 🏆 Kết Quả Dự Đoán AI:")
         if norm_28 is not None and np.max(norm_28) > 0.05:
             tensor_in = preprocessor.to_model_input(norm_28)
-            res = engine.predict_single(tensor_in, top_k=5)
+            res = engine.predict_single(
+                tensor_in, 
+                top_k=5, 
+                temperature=temperature_val, 
+                filter_mode=selected_filter
+            )
 
             best_char = res["best_character"]
             conf = res["best_confidence"]
@@ -164,7 +196,7 @@ with tab1:
                 }
                 for item in res["top_k"]
             ])
-            st.dataframe(top_df, hide_index=True, width=None)
+            st.dataframe(top_df, hide_index=True)
         else:
             st.info("Chờ nét vẽ để kích hoạt mạng nơ-ron...")
 
@@ -181,7 +213,7 @@ with tab2:
         up_doc = st.file_uploader("Tải ảnh chụp từ hoặc chuỗi số viết tay (JPG, PNG):", type=["jpg", "jpeg", "png"], key="word_uploader")
         if up_doc:
             doc_img = Image.open(up_doc)
-            st.image(doc_img, caption="Ảnh gốc tải lên", width=None)
+            st.image(doc_img, caption="Ảnh gốc tải lên")
 
     with col_ocr_res:
         if up_doc:
@@ -274,7 +306,7 @@ with tab4:
     exp2 = st.expander("❓ Top 6 Câu Hỏi Vấn Đáp Giảng Viên Hay Hỏi Nhất & Câu Trả Lời Mẫu", expanded=True)
     with exp2:
         st.markdown(
-            """
+            r"""
             **Câu 1: Tại sao lại chọn EMNIST ByClass 62 lớp thay vì MNIST 10 số thông thường?**  
             👉 *Trả lời:* MNIST 10 số quá dễ (đạt >99% với mạng đơn giản). Nhóm muốn thử thách với bài toán thế giới thực gồm cả chữ số, chữ hoa và chữ thường (62 lớp), đối mặt với các thách thức lớn như sự tương đồng giữa `O` và `0`, `c` và `C`, `l` và `1`.
 

@@ -87,24 +87,43 @@ class InferenceEngine:
             except Exception as e:
                 print(f"[!] Lỗi nạp trọng số: {e}")
 
-    def predict_single(self, input_tensor: np.ndarray, top_k: int = 5) -> Dict[str, Any]:
+    def predict_single(
+        self, 
+        input_tensor: np.ndarray, 
+        top_k: int = 5, 
+        temperature: float = 0.5,
+        filter_mode: str = "all"
+    ) -> Dict[str, Any]:
         """
         Suy luận 1 ký tự từ ma trận đầu vào (1, 1, 28, 28).
-        Tự động chuyển đổi trục ma trận (Transpose) phù hợp với chuẩn lưu trữ EMNIST.
+        Hỗ trợ:
+          - Temperature Scaling: Làm sắc nét phân bố xác suất Softmax.
+          - Context Filter: Lọc theo ngữ cảnh ('all', 'digits', 'letters').
         """
         t0 = time.perf_counter()
 
         if self.torch_model is not None:
             # EMNIST chuẩn được lưu theo row-major đảo trục: hoán vị (height <-> width)
-            # input_tensor có shape (1, 1, 28, 28)
             norm_2d = input_tensor[0, 0]
             transposed_2d = np.transpose(norm_2d)
             model_in = np.expand_dims(np.expand_dims(transposed_2d, axis=0), axis=0)
 
             with torch.no_grad():
                 tensor = torch.from_numpy(model_in).float().to(self.device)
-                logits = self.torch_model(tensor)
-                probs = torch.softmax(logits, dim=1).cpu().numpy()[0]
+                logits = self.torch_model(tensor)[0]  # (62,)
+
+                # 1. Bộ lọc ngữ cảnh (Context Masking)
+                if filter_mode == "digits":
+                    # Chỉ giữ lại 0-9 (index 0 đến 9), triệt tiêu chữ cái
+                    logits[10:] = -1e9
+                elif filter_mode == "letters":
+                    # Chỉ giữ lại chữ cái (index 10 đến 61), triệt tiêu chữ số
+                    logits[:10] = -1e9
+
+                # 2. Temperature Scaling để làm sắc nét phân bố xác suất
+                T = max(0.1, min(temperature, 2.0))
+                scaled_logits = logits / T
+                probs = torch.softmax(scaled_logits, dim=0).cpu().numpy()
         else:
             probs = np.zeros(len(self.class_names))
             probs[0] = 1.0
