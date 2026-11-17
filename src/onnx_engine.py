@@ -254,10 +254,17 @@ class InferenceEngine:
                 temperature=temperature, 
                 filter_mode=filter_mode
             )
-            word_result += res["best_character"]
+            ch = res["best_character"]
+            if "char_crop" in item and ch in ['I', 'J', 'l', '1']:
+                from nist_preprocessor import NISTPreprocessor
+                if not hasattr(self, "_nist_prep"):
+                    self._nist_prep = NISTPreprocessor()
+                ch, _ = self._nist_prep.refine_dotted_character(item["char_crop"], ch)
+
+            word_result += ch
             total_time += res["latency_ms"]
             char_details.append({
-                "char": res["best_character"],
+                "char": ch,
                 "confidence": res["best_confidence"],
                 "bbox": item["bbox"],
                 "top_k": res["top_k"]

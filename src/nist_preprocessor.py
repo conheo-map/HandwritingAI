@@ -131,3 +131,78 @@ class NISTPreprocessor:
     def to_model_input(self, normalized_array: np.ndarray) -> np.ndarray:
         """Định hình ma trận ảnh về dạng NCHW (1, 1, 28, 28) sẵn sàng cho PyTorch / ONNX."""
         return np.expand_dims(np.expand_dims(normalized_array, axis=0), axis=0)
+
+    def refine_dotted_character(self, raw_img: np.ndarray, predicted_char: str) -> Tuple[str, bool]:
+        """
+        Khôi phục chính xác chữ 'i' / 'j' thường khi mô hình dự đoán ra 'I' / 'J'.
+        Trong tập EMNIST Balanced 47 lớp của Viện NIST, chữ 'I' in hoa và 'i' thường bị gộp chung vào nhãn 'I'.
+        Phương thức này phân tích hình thái học (Connected Components): Nếu phát hiện dấu chấm tách rời
+        ở phía trên thân chữ, nhãn sẽ được tinh chỉnh thành chữ 'i' hoặc 'j' thường chuẩn xác.
+        Trả về: (refined_character, is_refined)
+        """
+        if predicted_char not in ['I', 'J', 'l', '1']:
+            return predicted_char, False
+
+        # 0. Chuẩn hóa kiểu dữ liệu
+        if raw_img.dtype != np.uint8:
+            if np.max(raw_img) <= 1.0:
+                img_u8 = (raw_img * 255).astype(np.uint8)
+            else:
+                img_u8 = raw_img.astype(np.uint8)
+        else:
+            img_u8 = raw_img.copy()
+
+        # 1. Chuyển đổi sang ảnh xám
+        if len(img_u8.shape) == 3:
+            if img_u8.shape[2] == 4:
+                rgb = img_u8[:, :, :3]
+                gray = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)
+            else:
+                gray = cv2.cvtColor(img_u8, cv2.COLOR_RGB2GRAY)
+        else:
+            gray = img_u8.copy()
+
+        # Nền đen chữ trắng
+        if np.mean(gray) > 127:
+            gray = 255 - gray
+
+        # 2. Nhị phân hóa và tìm thành phần liên thông
+        _, thresh = cv2.threshold(gray, 25, 255, cv2.THRESH_BINARY)
+        num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(thresh)
+
+        valid_comps = []
+        for idx in range(1, num_labels):
+            area = stats[idx, cv2.CC_STAT_AREA]
+            if area > 8:  # Lọc bỏ nhiễu cực nhỏ
+                valid_comps.append({
+                    "area": area,
+                    "y": stats[idx, cv2.CC_STAT_TOP],
+                    "x": stats[idx, cv2.CC_STAT_LEFT],
+                    "w": stats[idx, cv2.CC_STAT_WIDTH],
+                    "h": stats[idx, cv2.CC_STAT_HEIGHT]
+                })
+
+        # Chữ 'i' hoặc 'j' thường luôn có ít nhất 2 thành phần: Dấu chấm ở trên và thân chữ ở dưới
+        if len(valid_comps) >= 2:
+            # Component có diện tích lớn nhất chính là thân chữ
+            body_comp = max(valid_comps, key=lambda c: c["area"])
+
+            for comp in valid_comps:
+                if comp == body_comp:
+                    continue
+
+                # Điều kiện dấu chấm:
+                # 1. Nằm phía trên thân chữ
+                is_above = (comp["y"] + comp["h"]) <= (body_comp["y"] + 14)
+                # 2. Diện tích nhỏ hơn thân chữ rõ rệt
+                area_ratio = comp["area"] / max(1, body_comp["area"])
+                # 3. Thẳng hàng theo phương ngang (cho phép sai số nhỏ)
+                overlap_x = min(comp["x"] + comp["w"], body_comp["x"] + body_comp["w"]) - max(comp["x"], body_comp["x"])
+
+                if area_ratio < 0.65 and is_above and overlap_x > -25:
+                    if predicted_char in ['I', 'l', '1']:
+                        return 'i', True
+                    elif predicted_char == 'J':
+                        return 'j', True
+
+        return predicted_char, False

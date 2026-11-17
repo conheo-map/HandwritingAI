@@ -74,3 +74,32 @@ def test_nist_preprocessor_scale_invariance():
     large_non_zero = np.sum(large_norm > 0.1)
     assert small_non_zero > 20
     assert large_non_zero > 20
+
+
+def test_refine_dotted_character():
+    """Kiểm tra khôi phục chữ i/j thường từ dự đoán I/J khi có dấu chấm."""
+    p = NISTPreprocessor()
+
+    # Tạo chữ 'i' gồm thân (dưới) và dấu chấm (trên)
+    canvas = np.zeros((280, 280, 3), dtype=np.uint8)
+    # Dấu chấm: hình tròn bán kính 6 tại (140, 70)
+    cv2.circle(canvas, (140, 70), 6, (255, 255, 255), -1)
+    # Thân chữ: nét thẳng từ (140, 100) đến (140, 180) dày 12px
+    cv2.line(canvas, (140, 100), (140, 180), (255, 255, 255), 12)
+
+    refined, is_refined = p.refine_dotted_character(canvas, 'I')
+    assert refined == 'i'
+    assert is_refined is True
+
+    # Nếu mô hình dự đoán chữ 'A', không tinh chỉnh
+    refined_a, is_ref_a = p.refine_dotted_character(canvas, 'A')
+    assert refined_a == 'A'
+    assert is_ref_a is False
+
+    # Nếu chỉ có 1 nét thẳng (chữ I in hoa), không tinh chỉnh
+    canvas_cap = np.zeros((280, 280, 3), dtype=np.uint8)
+    cv2.line(canvas_cap, (140, 60), (140, 200), (255, 255, 255), 16)
+    refined_cap, is_ref_cap = p.refine_dotted_character(canvas_cap, 'I')
+    assert refined_cap == 'I'
+    assert is_ref_cap is False
+

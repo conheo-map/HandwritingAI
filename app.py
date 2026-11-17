@@ -158,6 +158,9 @@ if active_mode == "Bảng vẽ tương tác":
             )
 
             best_char = res["best_character"]
+            # Tinh chỉnh hình thái học: khôi phục i/j thường khi phát hiện dấu chấm tách rời phía trên
+            refined_char, is_refined = preprocessor.refine_dotted_character(raw_img, best_char)
+            best_char = refined_char
             conf = res["best_confidence"]
             latency = res["latency_ms"]
 
@@ -180,15 +183,21 @@ if active_mode == "Bảng vẽ tương tác":
                 unsafe_allow_html=True
             )
 
+            if is_refined:
+                st.caption("Nhận diện thành phần liên thông: Đã phát hiện dấu chấm phía trên thân chữ để phân biệt chữ 'i'/'j' thường với 'I'/'J' in hoa.")
+
             st.markdown("##### Top 5 xác suất Softmax:")
-            top_df = pd.DataFrame([
-                {
-                    "Ký tự": f"'{item['character']}'",
+            top_items = []
+            for idx_k, item in enumerate(res["top_k"]):
+                c_name = item["character"]
+                if idx_k == 0 and is_refined:
+                    c_name = best_char
+                top_items.append({
+                    "Ký tự": f"'{c_name}'",
                     "Xác suất Softmax (%)": round(item["confidence"] * 100, 2),
-                    "Phân loại": "Chữ số" if item["is_digit"] else ("In hoa" if item["is_upper"] else "Thường")
-                }
-                for item in res["top_k"]
-            ])
+                    "Phân loại": "Chữ số" if c_name.isdigit() else ("In hoa" if c_name.isupper() else "Thường")
+                })
+            top_df = pd.DataFrame(top_items)
             st.dataframe(top_df, hide_index=True)
         else:
             st.info("Chờ nét vẽ để thực hiện suy luận...")
