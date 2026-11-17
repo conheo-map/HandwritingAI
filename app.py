@@ -82,30 +82,13 @@ bg_color = st.sidebar.color_picker("Màu nền canvas:", "#000000")
 st.title("Handwriting Recognition")
 st.caption("Nhận diện ký tự và từ viết tay thời gian thực bằng mô hình Deep ResNet-18 và chuẩn hóa NIST Center-of-Mass.")
 
-# CSS định hình đường viền khung vẽ chuẩn xác, triệt tiêu khoảng hở lệch
+# CSS loại bỏ viền ngoài thừa của iframe, để khung vẽ tự nhiên và sạch sẽ
 st.markdown(
     """
     <style>
-    /* Tab 1: Khung vẽ ký tự đơn (280x280) ôm sát viền chuẩn xác */
-    div[data-testid="column"] iframe[title="streamlit_drawable_canvas.st_canvas"] {
-        width: 282px !important;
-        max-width: 282px !important;
-        border: 1px solid #4B5563 !important;
-        border-radius: 8px !important;
-        background-color: #000000 !important;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4) !important;
-        display: block !important;
-        margin-left: 0 !important;
-    }
-
-    /* Tab 2: Khung vẽ chuỗi từ ngữ liền nét (700x180) ôm sát viền */
     iframe[title="streamlit_drawable_canvas.st_canvas"] {
-        max-width: 702px !important;
-        border: 1px solid #4B5563 !important;
-        border-radius: 8px !important;
-        background-color: #000000 !important;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4) !important;
-        display: block !important;
+        border: none !important;
+        background-color: transparent !important;
     }
     </style>
     """,
