@@ -28,9 +28,9 @@ def verify():
     model.load_state_dict(ckpt["model_state_dict"])
     model.to(device).eval()
 
-    test_words = ["account", "balance", "hello", "system", "learning", "2026", "AI", "money"]
+    test_words = ["h", "hi", "account", "balance", "hello", "system", "cat", "2026", "money", "AI"]
     print("=" * 65)
-    print("KIỂM TRA THỰC NGHIỆM TỪ VIẾT TAY UỐN LƯỢN VỚI MÔ HÌNH CRNN:")
+    print("KIỂM TRA THỰC NGHIỆM CRNN (LEFT-ALIGNED & ĐA DẠNG ĐỘ DÀI):")
     print("=" * 65)
 
     font_path = "C:/Windows/Fonts/segoesc.ttf"
@@ -53,11 +53,13 @@ def verify():
             crop = arr
 
         h, bw = crop.shape
-        scale = 28.0 / max(1, h)
-        nw = min(150, int(round(bw * scale)))
-        resized = cv2.resize(crop, (nw, 28))
+        scale = 26.0 / max(1, h)
+        scaled_w = min(152, max(4, int(round(bw * scale))))
+        resized = cv2.resize(crop, (scaled_w, 26))
+
+        # CĂN LỀ TRÁI CHUẨN XÁC TẠI OFFSET_X = 4
         canvas = np.zeros((32, 160), dtype=np.uint8)
-        canvas[2:30, 5:5+nw] = resized
+        canvas[3:29, 4:4+scaled_w] = resized
 
         tensor = torch.tensor(canvas / 255.0, dtype=torch.float32).unsqueeze(0).unsqueeze(0).to(device)
         with torch.inference_mode():
@@ -70,7 +72,7 @@ def verify():
         status = "DUNG" if is_match else "SAI"
         print(f"Từ gốc: {w:10s} -> CRNN nhận diện: {pred:10s} | [{status}]")
 
-    print(f"Kết quả: {correct}/{len(test_words)} ({correct/len(test_words)*100:.1f}%) chính xác hoàn hảo!")
+    print(f"Kết quả: {correct}/{len(test_words)} ({correct/len(test_words)*100:.1f}%) chính xác!")
     print("=" * 65)
 
 if __name__ == "__main__":

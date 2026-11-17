@@ -317,15 +317,16 @@ class InferenceEngine:
         crop = gray[y1:y2, x1:x2]
 
         ch_h, ch_w = crop.shape
-        # Co giãn chiều cao về 28px để đệm viền 2px trên dưới thành 32px
-        scale = 28.0 / max(1, ch_h)
-        scaled_w = min(150, int(round(ch_w * scale)))
-        resized = cv2.resize(crop, (max(1, scaled_w), 28), interpolation=cv2.INTER_AREA)
+        # Co giãn chiều cao về 26px để đệm viền 3px trên dưới thành 32px
+        scale = 26.0 / max(1, ch_h)
+        scaled_w = min(152, max(4, int(round(ch_w * scale))))
+        resized = cv2.resize(crop, (scaled_w, 26), interpolation=cv2.INTER_AREA)
 
+        # CĂN LỀ TRÁI TẠI OFFSET_X = 4 (Khớp 100% với nguyên tắc giải mã CTC)
         canvas = np.zeros((32, 160), dtype=np.uint8)
-        offset_y = 2
-        offset_x = (160 - scaled_w) // 2
-        canvas[offset_y:offset_y+28, offset_x:offset_x+scaled_w] = resized
+        offset_y = 3
+        offset_x = 4
+        canvas[offset_y:offset_y+26, offset_x:offset_x+scaled_w] = resized
 
         return canvas, crop
 

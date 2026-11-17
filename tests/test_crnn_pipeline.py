@@ -1,7 +1,6 @@
 import sys
 from pathlib import Path
 import numpy as np
-import cv2
 import pytest
 from PIL import Image, ImageDraw, ImageFont
 
@@ -16,21 +15,22 @@ def test_crnn_pipeline_prediction():
     engine = InferenceEngine()
     assert engine.crnn_model is not None, "Mô hình CRNN chưa được nạp thành công!"
 
-    # Giả lập vẽ từ 'account' lên ảnh
-    canvas = np.zeros((180, 700), dtype=np.uint8)
     font_path = "C:/Windows/Fonts/segoesc.ttf"
     if not Path(font_path).exists():
         font_path = "C:/Windows/Fonts/comic.ttf"
 
     font = ImageFont.truetype(font_path, 42)
-    img_pil = Image.fromarray(canvas)
-    draw = ImageDraw.Draw(img_pil)
-    draw.text((60, 40), "account", fill=255, font=font)
-    drawn_arr = np.array(img_pil)
 
-    res = engine.predict_cursive_word(drawn_arr)
+    for word in ["h", "hi", "account"]:
+        canvas = np.zeros((180, 700), dtype=np.uint8)
+        img_pil = Image.fromarray(canvas)
+        draw = ImageDraw.Draw(img_pil)
+        draw.text((60, 40), word, fill=255, font=font)
+        drawn_arr = np.array(img_pil)
 
-    assert "predicted_text" in res
-    assert "latency_ms" in res
-    assert res["latency_ms"] > 0
-    assert res["predicted_text"].lower() == "account", f"CRNN dự đoán: '{res['predicted_text']}'"
+        res = engine.predict_cursive_word(drawn_arr)
+
+        assert "predicted_text" in res
+        assert "latency_ms" in res
+        assert res["latency_ms"] > 0
+        assert res["predicted_text"].lower() == word.lower(), f"CRNN dự đoán '{res['predicted_text']}' cho từ '{word}'"

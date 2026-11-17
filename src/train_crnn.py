@@ -14,7 +14,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(BASE_DIR / "src"))
 
 from crnn_model import CRNNHandwritingRecognizer, CTCLabelConverter
-from cursive_word_generator import SyntheticCursiveWordDataset, pad_collate_fn
+from cursive_word_generator import ComprehensiveWordDataset, pad_collate_fn
 
 
 def set_seed(seed: int = 42):
@@ -27,21 +27,22 @@ def set_seed(seed: int = 42):
 
 
 def train_crnn(
-    num_samples: int = 15000,
+    num_samples: int = 40000,
     epochs: int = 12,
     batch_size: int = 64,
-    lr: float = 0.0008,
-    model_name: str = "crnn_word_model.pt"
+    lr: float = 0.0005,
+    model_name: str = "crnn_word_model.pt",
+    load_checkpoint: bool = True
 ):
     set_seed(42)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     print(f"\n{'='*75}")
-    print(f"KHỞI TẠO HUẤN LUYỆN MÔ HÌNH CRNN + BiLSTM + CTC TRÊN: {device}")
+    print(f"KHỞI TẠO HUẤN LUYỆN TOÀN DIỆN MÔ HÌNH CRNN + BiLSTM + CTC TRÊN: {device}")
     print(f"{'='*75}")
 
     # 1. Khởi tạo dữ liệu từ ngữ viết tay đa dạng nét
-    full_dataset = SyntheticCursiveWordDataset(num_samples=num_samples, img_h=32, img_w=160)
+    full_dataset = ComprehensiveWordDataset(num_samples=num_samples, img_h=32, img_w=160)
     val_size = int(len(full_dataset) * 0.1)
     train_size = len(full_dataset) - val_size
     train_ds, val_ds = random_split(full_dataset, [train_size, val_size])
@@ -76,6 +77,21 @@ def train_crnn(
         num_lstm_layers=2,
         dropout=0.2
     )
+
+    models_dir = BASE_DIR / "models"
+    models_dir.mkdir(parents=True, exist_ok=True)
+    out_path = models_dir / model_name
+
+    if load_checkpoint and out_path.exists():
+        try:
+            print(f"Đang nạp trọng số nền tảng từ {model_name}...")
+            ckpt = torch.load(str(out_path), map_location=device)
+            if "model_state_dict" in ckpt:
+                model.load_state_dict(ckpt["model_state_dict"])
+            print("[✓] Nạp trọng số thành công. Tiếp tục huấn luyện hội tụ nâng cao...")
+        except Exception as e:
+            print(f"[!] Bỏ qua checkpoint cũ do: {e}")
+
     model.to(device)
 
     # 3. CTC Loss & Optimizer
@@ -193,4 +209,4 @@ def train_crnn(
 
 
 if __name__ == "__main__":
-    train_crnn(num_samples=18000, epochs=10, batch_size=64, lr=0.0008)
+    train_crnn(num_samples=35000, epochs=10, batch_size=64, lr=0.0005)
