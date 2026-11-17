@@ -197,19 +197,33 @@ if active_mode == "Bảng vẽ tương tác":
 # CHẾ ĐỘ 2: NHẬN DIỆN CHUỖI KÝ TỰ & TỪ VIẾT TAY (WORD OCR)
 # ══════════════════════════════════════════════════════════════════════════
 elif active_mode == "Nhận diện từ ngữ":
-    st.subheader("Nhận diện chuỗi ký tự viết tay")
-    st.markdown("Hỗ trợ vẽ trực tiếp cả chuỗi ký tự lên bảng vẽ hoặc tải ảnh tài liệu lên để phân đoạn và nhận diện.")
+    st.subheader("Nhận diện từ ngữ & chuỗi viết tay")
+    st.caption("Hỗ trợ cả chữ viết tay liền nét (Cursive Words) bằng mạng CRNN + CTC và chữ số / in hoa rời bằng ResNet-18.")
 
-    input_mode = st.segmented_control(
-        "Chọn phương thức nhập liệu:",
-        options=["Vẽ chuỗi ký tự trực tiếp", "Tải ảnh từ tệp"],
-        default="Vẽ chuỗi ký tự trực tiếp"
-    )
-    if input_mode is None:
-        input_mode = "Vẽ chuỗi ký tự trực tiếp"
+    col_ctrl1, col_ctrl2 = st.columns([1, 1], gap="medium")
+    with col_ctrl1:
+        input_mode = st.segmented_control(
+            "Phương thức nhập liệu:",
+            options=["Vẽ chuỗi ký tự trực tiếp", "Tải ảnh từ tệp"],
+            default="Vẽ chuỗi ký tự trực tiếp"
+        )
+        if input_mode is None:
+            input_mode = "Vẽ chuỗi ký tự trực tiếp"
+
+    with col_ctrl2:
+        algo_mode = st.segmented_control(
+            "Thuật toán nhận diện:",
+            options=["CRNN Liền Nét (BiLSTM + CTC)", "Phân Đoạn Rời (MoE ResNet)"],
+            default="CRNN Liền Nét (BiLSTM + CTC)"
+        )
+        if algo_mode is None:
+            algo_mode = "CRNN Liền Nét (BiLSTM + CTC)"
 
     if input_mode == "Vẽ chuỗi ký tự trực tiếp":
-        st.caption("Vẽ các ký tự lần lượt từ trái sang phải. Giữ khoảng cách nhỏ giữa các ký tự để thuật toán phân đoạn chính xác.")
+        if algo_mode == "CRNN Liền Nét (BiLSTM + CTC)":
+            st.caption("Khuyên dùng: Viết tự do từ ngữ uốn lượn hoặc liền nét (ví dụ: 'account', 'hello', 'balance', '2026'). Không cần nhấc bút tạo khoảng cách.")
+        else:
+            st.caption("Phương pháp phân đoạn: Viết từng ký tự rời nhau một khoảng nhỏ từ trái sang phải.")
 
         canvas_word = st_canvas(
             fill_color="rgba(255, 255, 255, 0)",
@@ -228,54 +242,90 @@ elif active_mode == "Nhận diện từ ngữ":
         )
 
         if has_strokes:
-            with st.spinner("Đang phân đoạn và nhận diện chuỗi ký tự..."):
-                segmented_items, annotated = segmenter.segment_image(canvas_word.image_data)
-
-            if segmented_items:
-                word_res = engine.predict_word(
-                    segmented_items, 
-                    temperature=temperature_val, 
-                    filter_mode=selected_filter
-                )
-
-                avg_conf = (
-                    sum(item["confidence"] for item in word_res["characters"]) / len(word_res["characters"])
-                    if word_res["characters"] else 0.0
-                )
+            if algo_mode == "CRNN Liền Nét (BiLSTM + CTC)":
+                with st.spinner("Đang suy luận chuỗi thời gian bằng CRNN + CTC..."):
+                    crnn_res = engine.predict_cursive_word(canvas_word.image_data)
 
                 st.markdown(
                     f"""
                     <div style="background-color: #1E1E2E; padding: 18px; border-radius: 8px; border: 1px solid #4B5563; margin-top: 15px; margin-bottom: 20px;">
-                        <span style="font-size: 14px; color: #9CA3AF; text-transform: uppercase; letter-spacing: 1px;">Kết Quả Nhận Diện:</span>
-                        <div style="font-size: 54px; font-weight: bold; color: #FFFFFF; font-family: monospace; letter-spacing: 6px;">
-                            {word_res['predicted_text']}
+                        <span style="font-size: 13px; color: #10B981; font-weight: bold; text-transform: uppercase; letter-spacing: 1px;">CRNN Sequence-to-Sequence Result:</span>
+                        <div style="font-size: 56px; font-weight: bold; color: #FFFFFF; font-family: monospace; letter-spacing: 4px;">
+                            {crnn_res['predicted_text']}
                         </div>
                         <span style="color: #9CA3AF; font-size: 14px;">
-                            Số ký tự: <b>{word_res['num_characters']}</b> | 
-                            Độ tin cậy TB: <b>{avg_conf * 100:.2f}%</b> | 
-                            Tổng thời gian: <b>{word_res['total_latency_ms']:.2f} ms</b>
+                            Kiến trúc: <b>ResNet Backbone + 2 tầng BiLSTM (512-dim) + CTC Loss</b> | 
+                            Độ trễ suy luận: <b>{crnn_res['latency_ms']:.2f} ms</b>
                         </span>
                     </div>
                     """,
                     unsafe_allow_html=True
                 )
 
-                c_vis, c_details = st.columns([1, 1], gap="medium")
+                c_vis, c_desc = st.columns([1, 1], gap="medium")
                 with c_vis:
-                    st.markdown("##### Kết quả phân đoạn không gian (Bounding Boxes):")
-                    st.image(annotated, channels="BGR", caption="Các ký tự được tách độc lập theo thứ tự từ trái sang phải")
+                    st.markdown("##### Dữ liệu chuẩn hóa đưa vào mạng CRNN (32x160):")
+                    disp_crnn = cv2.resize(crnn_res["preprocessed_img"], (320, 64), interpolation=cv2.INTER_NEAREST)
+                    st.image(disp_crnn, caption="Đặc trưng ảnh nguyên từ được quét trượt theo trục thời gian W (Segmentation-Free)")
 
-                with c_details:
-                    st.markdown("##### Chi tiết từng ký tự sau chuẩn hóa:")
-                    cols_char = st.columns(min(len(segmented_items), 8))
-                    for i, item in enumerate(segmented_items[:8]):
-                        with cols_char[i]:
-                            char_info = word_res["characters"][i]
-                            st.image(item["normalized_28x28"], caption=f"#{i+1}: '{char_info['char']}'\n({char_info['confidence']*100:.1f}%)", width=55)
+                with c_desc:
+                    st.markdown("##### Cơ sở lý thuyết giải quyết Nghịch lý Sayre:")
+                    st.markdown(
+                        """
+                        - **Không cắt ký tự (Segmentation-Free):** Giữ nguyên vẹn các nét nối (*ligatures*) giữa các chữ cái.
+                        - **BiLSTM 2 chiều:** Nắm bắt mạch nét bút theo cả 2 chiều từ trái sang phải và ngược lại.
+                        - **Hàm mất mát CTC:** Tự động gộp các bước thời gian lặp và loại bỏ token rỗng (*blank token*).
+                        """
+                    )
             else:
-                st.warning("Chưa tách được ký tự. Vui lòng viết nét liền và để khoảng cách nhỏ giữa các ký tự.")
+                with st.spinner("Đang phân đoạn và nhận diện chuỗi ký tự..."):
+                    segmented_items, annotated = segmenter.segment_image(canvas_word.image_data)
+
+                if segmented_items:
+                    word_res = engine.predict_word(
+                        segmented_items, 
+                        temperature=temperature_val, 
+                        filter_mode=selected_filter
+                    )
+
+                    avg_conf = (
+                        sum(item["confidence"] for item in word_res["characters"]) / len(word_res["characters"])
+                        if word_res["characters"] else 0.0
+                    )
+
+                    st.markdown(
+                        f"""
+                        <div style="background-color: #1E1E2E; padding: 18px; border-radius: 8px; border: 1px solid #4B5563; margin-top: 15px; margin-bottom: 20px;">
+                            <span style="font-size: 14px; color: #9CA3AF; text-transform: uppercase; letter-spacing: 1px;">Kết Quả Nhận Diện:</span>
+                            <div style="font-size: 54px; font-weight: bold; color: #FFFFFF; font-family: monospace; letter-spacing: 6px;">
+                                {word_res['predicted_text']}
+                            </div>
+                            <span style="color: #9CA3AF; font-size: 14px;">
+                                Số ký tự: <b>{word_res['num_characters']}</b> | 
+                                Độ tin cậy TB: <b>{avg_conf * 100:.2f}%</b> | 
+                                Tổng thời gian: <b>{word_res['total_latency_ms']:.2f} ms</b>
+                            </span>
+                        </div>
+                        """,
+                        unsafe_allow_html=True
+                    )
+
+                    c_vis, c_details = st.columns([1, 1], gap="medium")
+                    with c_vis:
+                        st.markdown("##### Kết quả phân đoạn không gian (Bounding Boxes):")
+                        st.image(annotated, channels="BGR", caption="Các ký tự được tách độc lập theo thứ tự từ trái sang phải")
+
+                    with c_details:
+                        st.markdown("##### Chi tiết từng ký tự sau chuẩn hóa:")
+                        cols_char = st.columns(min(len(segmented_items), 8))
+                        for i, item in enumerate(segmented_items[:8]):
+                            with cols_char[i]:
+                                char_info = word_res["characters"][i]
+                                st.image(item["normalized_28x28"], caption=f"#{i+1}: '{char_info['char']}'\n({char_info['confidence']*100:.1f}%)", width=55)
+                else:
+                    st.warning("Chưa tách được ký tự. Vui lòng viết nét liền và để khoảng cách nhỏ giữa các ký tự.")
         else:
-            st.info("Hãy vẽ một chuỗi chữ số hoặc chữ cái lên bảng vẽ ở trên để nhận diện.")
+            st.info("Hãy viết một từ ngữ hoặc chuỗi ký tự lên bảng vẽ ở trên để nhận diện.")
 
     else:
         col_up, col_ocr_res = st.columns([1, 1], gap="large")
@@ -288,49 +338,71 @@ elif active_mode == "Nhận diện từ ngữ":
 
         with col_ocr_res:
             if up_doc:
-                with st.spinner("Đang xử lý phân đoạn và nhận diện..."):
-                    segmented_items, annotated = segmenter.segment_image(doc_img)
+                if algo_mode == "CRNN Liền Nét (BiLSTM + CTC)":
+                    with st.spinner("Đang nhận diện bằng mạng CRNN..."):
+                        crnn_res = engine.predict_cursive_word(doc_img)
 
-                    if segmented_items:
-                        word_res = engine.predict_word(
-                            segmented_items, 
-                            temperature=temperature_val, 
-                            filter_mode=selected_filter
-                        )
-
-                        avg_conf = (
-                            sum(item["confidence"] for item in word_res["characters"]) / len(word_res["characters"])
-                            if word_res["characters"] else 0.0
-                        )
-
-                        st.markdown(
-                            f"""
-                            <div style="background-color: #1E1E2E; padding: 18px; border-radius: 8px; border: 1px solid #4B5563; margin-bottom: 20px;">
-                                <span style="font-size: 14px; color: #9CA3AF; text-transform: uppercase; letter-spacing: 1px;">Kết Quả Nhận Diện:</span>
-                                <div style="font-size: 48px; font-weight: bold; color: #FFFFFF; font-family: monospace; letter-spacing: 4px;">
-                                    {word_res['predicted_text']}
-                                </div>
-                                <span style="color: #9CA3AF; font-size: 14px;">
-                                    Số ký tự: <b>{word_res['num_characters']}</b> | 
-                                    Độ tin cậy TB: <b>{avg_conf * 100:.2f}%</b> | 
-                                    Tổng thời gian: <b>{word_res['total_latency_ms']:.2f} ms</b>
-                                </span>
+                    st.markdown(
+                        f"""
+                        <div style="background-color: #1E1E2E; padding: 18px; border-radius: 8px; border: 1px solid #4B5563; margin-bottom: 20px;">
+                            <span style="font-size: 13px; color: #10B981; font-weight: bold; text-transform: uppercase; letter-spacing: 1px;">CRNN Sequence Result:</span>
+                            <div style="font-size: 52px; font-weight: bold; color: #FFFFFF; font-family: monospace; letter-spacing: 4px;">
+                                {crnn_res['predicted_text']}
                             </div>
-                            """,
-                            unsafe_allow_html=True
-                        )
+                            <span style="color: #9CA3AF; font-size: 14px;">
+                                Độ trễ: <b>{crnn_res['latency_ms']:.2f} ms</b> | Phương pháp: <b>Segmentation-Free CTC</b>
+                            </span>
+                        </div>
+                        """,
+                        unsafe_allow_html=True
+                    )
+                    st.markdown("##### Ảnh tiền xử lý đưa vào mạng CRNN:")
+                    disp_crnn = cv2.resize(crnn_res["preprocessed_img"], (320, 64), interpolation=cv2.INTER_NEAREST)
+                    st.image(disp_crnn, caption="Đặc trưng ảnh nguyên từ 32x160")
+                else:
+                    with st.spinner("Đang xử lý phân đoạn và nhận diện..."):
+                        segmented_items, annotated = segmenter.segment_image(doc_img)
 
-                        st.markdown("##### Kết quả phân đoạn ảnh:")
-                        st.image(annotated, channels="BGR", caption="Khung nhận diện bounding box")
+                        if segmented_items:
+                            word_res = engine.predict_word(
+                                segmented_items, 
+                                temperature=temperature_val, 
+                                filter_mode=selected_filter
+                            )
 
-                        st.markdown("##### Chi tiết từng ký tự:")
-                        cols_char = st.columns(min(len(segmented_items), 8))
-                        for i, item in enumerate(segmented_items[:8]):
-                            with cols_char[i]:
-                                char_info = word_res["characters"][i]
-                                st.image(item["normalized_28x28"], caption=f"#{i+1}: '{char_info['char']}'\n({char_info['confidence']*100:.1f}%)", width=55)
-                    else:
-                        st.warning("Không tìm thấy nét chữ rõ ràng trong ảnh.")
+                            avg_conf = (
+                                sum(item["confidence"] for item in word_res["characters"]) / len(word_res["characters"])
+                                if word_res["characters"] else 0.0
+                            )
+
+                            st.markdown(
+                                f"""
+                                <div style="background-color: #1E1E2E; padding: 18px; border-radius: 8px; border: 1px solid #4B5563; margin-bottom: 20px;">
+                                    <span style="font-size: 14px; color: #9CA3AF; text-transform: uppercase; letter-spacing: 1px;">Kết Quả Nhận Diện:</span>
+                                    <div style="font-size: 48px; font-weight: bold; color: #FFFFFF; font-family: monospace; letter-spacing: 4px;">
+                                        {word_res['predicted_text']}
+                                    </div>
+                                    <span style="color: #9CA3AF; font-size: 14px;">
+                                        Số ký tự: <b>{word_res['num_characters']}</b> | 
+                                        Độ tin cậy TB: <b>{avg_conf * 100:.2f}%</b> | 
+                                        Tổng thời gian: <b>{word_res['total_latency_ms']:.2f} ms</b>
+                                    </span>
+                                </div>
+                                """,
+                                unsafe_allow_html=True
+                            )
+
+                            st.markdown("##### Kết quả phân đoạn ảnh:")
+                            st.image(annotated, channels="BGR", caption="Khung nhận diện bounding box")
+
+                            st.markdown("##### Chi tiết từng ký tự:")
+                            cols_char = st.columns(min(len(segmented_items), 8))
+                            for i, item in enumerate(segmented_items[:8]):
+                                with cols_char[i]:
+                                    char_info = word_res["characters"][i]
+                                    st.image(item["normalized_28x28"], caption=f"#{i+1}: '{char_info['char']}'\n({char_info['confidence']*100:.1f}%)", width=55)
+                        else:
+                            st.warning("Không tìm thấy nét chữ rõ ràng trong ảnh.")
             else:
                 st.info("Tải lên ảnh chứa chữ viết tay ở cột bên trái.")
 

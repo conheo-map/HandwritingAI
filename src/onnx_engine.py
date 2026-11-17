@@ -5,7 +5,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 from pathlib import Path
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Tuple
 
 # Bản đồ 62 ký tự EMNIST ByClass chuẩn
 EMNIST_BYCLASS_CHARS = list(string.digits + string.ascii_uppercase + string.ascii_lowercase)
@@ -137,6 +137,28 @@ class InferenceEngine:
             except Exception as e:
                 pass
 
+        # ── NẠP MÔ HÌNH CRNN + BiLSTM + CTC (CHO TỪ LIỀN NÉT) ──
+        self.crnn_model = None
+        self.crnn_converter = None
+        crnn_path = models_dir / "crnn_word_model.pt"
+        if crnn_path.exists():
+            try:
+                from crnn_model import CRNNHandwritingRecognizer, CTCLabelConverter
+                sd = torch.load(str(crnn_path), map_location=self.device)
+                self.crnn_converter = CTCLabelConverter(sd.get("charset"))
+                m = CRNNHandwritingRecognizer(
+                    img_h=32,
+                    in_channels=1,
+                    num_classes=sd["num_classes"],
+                    hidden_size=sd.get("hidden_size", 256)
+                )
+                m.load_state_dict(sd["model_state_dict"])
+                m.to(self.device).eval()
+                self.crnn_model = m
+                print(f"[✓] Đã kích hoạt Mô hình CRNN (BiLSTM + CTC) trên {self.device}")
+            except Exception as e:
+                print(f"[!] Lỗi nạp mô hình CRNN: {e}")
+
     def predict_single(
         self, 
         input_tensor: np.ndarray, 
@@ -246,4 +268,97 @@ class InferenceEngine:
             "total_latency_ms": total_time,
             "num_characters": len(segmented_chars),
             "characters": char_details
+        }
+
+    def preprocess_word_for_crnn(self, image_input) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Chuẩn hóa ảnh nguyên cả từ viết tay thành ma trận [32, 160] cho mô hình CRNN.
+        Bảo toàn toàn bộ nét nối uốn lượn (Ligatures) mà không cắt ký tự.
+        """
+        import cv2
+        from PIL import Image
+
+        if isinstance(image_input, Image.Image):
+            arr = np.array(image_input.convert("RGB"))
+        elif isinstance(image_input, np.ndarray):
+            arr = image_input.copy()
+        else:
+            arr = cv2.imread(str(image_input))
+
+        # Chuyển xám
+        if len(arr.shape) == 3:
+            if arr.shape[2] == 4:
+                alpha = arr[:, :, 3]
+                rgb = arr[:, :, :3]
+                gray = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)
+                if np.max(alpha) > 0 and np.mean(gray) > 200:
+                    gray = 255 - gray
+            else:
+                gray = cv2.cvtColor(arr, cv2.COLOR_RGB2GRAY)
+        else:
+            gray = arr.copy()
+
+        # Nền đen chữ trắng
+        if np.mean(gray) > 127:
+            gray = 255 - gray
+
+        # Lọc nhiễu nhẹ
+        blurred = cv2.GaussianBlur(gray, (3, 3), 0)
+        coords = cv2.findNonZero(blurred)
+
+        if coords is None:
+            empty = np.zeros((32, 160), dtype=np.uint8)
+            return empty, empty
+
+        x, y, w, h = cv2.boundingRect(coords)
+        pad = 2
+        y1, y2 = max(0, y - pad), min(gray.shape[0], y + h + pad)
+        x1, x2 = max(0, x - pad), min(gray.shape[1], x + w + pad)
+        crop = gray[y1:y2, x1:x2]
+
+        ch_h, ch_w = crop.shape
+        # Co giãn chiều cao về 28px để đệm viền 2px trên dưới thành 32px
+        scale = 28.0 / max(1, ch_h)
+        scaled_w = min(150, int(round(ch_w * scale)))
+        resized = cv2.resize(crop, (max(1, scaled_w), 28), interpolation=cv2.INTER_AREA)
+
+        canvas = np.zeros((32, 160), dtype=np.uint8)
+        offset_y = 2
+        offset_x = (160 - scaled_w) // 2
+        canvas[offset_y:offset_y+28, offset_x:offset_x+scaled_w] = resized
+
+        return canvas, crop
+
+    def predict_cursive_word(self, image_input) -> Dict[str, Any]:
+        """
+        Nhận diện cả từ viết tay liền nét (Cursive Word) bằng kiến trúc CRNN + BiLSTM + CTC.
+        Hoàn toàn Segmentation-Free (không cắt chữ).
+        """
+        if self.crnn_model is None:
+            return {
+                "predicted_text": "(Chưa nạp mô hình CRNN)",
+                "latency_ms": 0.0,
+                "preprocessed_img": np.zeros((32, 160), dtype=np.uint8)
+            }
+
+        t0 = time.perf_counter()
+        canvas_32x160, raw_crop = self.preprocess_word_for_crnn(image_input)
+
+        norm_tensor = torch.tensor(
+            canvas_32x160 / 255.0, 
+            dtype=torch.float32
+        ).unsqueeze(0).unsqueeze(0).to(self.device)
+
+        with torch.inference_mode():
+            log_probs = self.crnn_model(norm_tensor)
+            decoded_texts = self.crnn_converter.decode_greedy(log_probs)
+
+        latency_ms = (time.perf_counter() - t0) * 1000
+        pred_text = decoded_texts[0] if decoded_texts else ""
+
+        return {
+            "predicted_text": pred_text,
+            "latency_ms": latency_ms,
+            "preprocessed_img": canvas_32x160,
+            "crop_img": raw_crop
         }
